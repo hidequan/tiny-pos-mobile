@@ -130,17 +130,27 @@ class _TicketCard extends StatelessWidget {
                         padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
                         decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.line2))),
                         child: Row(children: [
-                          AppBadge(
-                            ticket.type == 'dinein' ? '🪑 Bàn ${ticket.table ?? '—'}' : '🥡 Mang đi',
-                            color: ticket.type == 'dinein' ? BadgeColor.blue : BadgeColor.gray,
+                          // Left group (type badge + code + NEW) scales down to
+                          // fit so the row never overflows on narrow cards.
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                AppBadge(
+                                  ticket.type == 'dinein' ? '🪑 Bàn ${ticket.table ?? '—'}' : '🥡 Mang đi',
+                                  color: ticket.type == 'dinein' ? BadgeColor.blue : BadgeColor.gray,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(ticket.code, style: AppType.display(size: 17, weight: FontWeight.w700, color: p.ink)),
+                                if (ticket.isNew) ...[
+                                  const SizedBox(width: 6),
+                                  const AppBadge('MỚI', color: BadgeColor.red, pulse: true),
+                                ],
+                              ]),
+                            ),
                           ),
                           const SizedBox(width: 8),
-                          Text(ticket.code, style: AppType.display(size: 17, weight: FontWeight.w700, color: p.ink)),
-                          if (ticket.isNew) ...[
-                            const SizedBox(width: 6),
-                            const AppBadge('MỚI', color: BadgeColor.red, pulse: true),
-                          ],
-                          const Spacer(),
                           Text(fmtAgo(ticket.ago), style: AppType.body(size: 13, weight: FontWeight.w800, color: timerColor)),
                           const SizedBox(width: 5),
                           Icon(AppIcons.get('clock'), size: 14, color: timerColor),

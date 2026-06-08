@@ -64,7 +64,7 @@ class AdminHomeScreen extends StatelessWidget {
                 crossAxisCount: 2,
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
-                mainAxisExtent: 118,
+                mainAxisExtent: 138,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 children: [

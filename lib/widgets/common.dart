@@ -545,7 +545,13 @@ class KvRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: AppType.body(size: size, weight: FontWeight.w600, color: p.ink2)),
+          Flexible(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppType.body(size: size, weight: FontWeight.w600, color: p.ink2)),
+          ),
+          const SizedBox(width: 10),
           value,
         ],
       ),
@@ -638,15 +644,22 @@ class TopBar extends StatelessWidget {
       child: Row(
         children: [
           if (leading != null) ...[leading!, const SizedBox(width: 6)],
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(title, style: AppType.display(size: 21, height: 1.05, color: p.ink)),
-              if (subtitle != null) ...[const SizedBox(height: 1), subtitle!],
-            ],
+          // Expanded so a long title/subtitle shrinks (ellipsis) instead of
+          // pushing the action buttons off the right edge.
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppType.display(size: 21, height: 1.05, color: p.ink)),
+                if (subtitle != null) ...[const SizedBox(height: 1), subtitle!],
+              ],
+            ),
           ),
-          const Spacer(),
+          const SizedBox(width: 10),
           for (var i = 0; i < actions.length; i++) ...[
             if (i > 0) const SizedBox(width: 10),
             actions[i],
@@ -685,16 +698,21 @@ class Segmented extends StatelessWidget {
                         ? const [BoxShadow(color: Color(0x10241008), blurRadius: 3, offset: Offset(0, 1))]
                         : null,
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (i < icons.length && icons[i] != null) ...[
-                        Icon(AppIcons.get(icons[i]!), size: 18, color: active == i ? p.ink : p.ink2),
-                        const SizedBox(width: 7),
+                  // Scale the label down to fit narrow segments instead of
+                  // overflowing (e.g. "Định lượng (BOM)").
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (i < icons.length && icons[i] != null) ...[
+                          Icon(AppIcons.get(icons[i]!), size: 18, color: active == i ? p.ink : p.ink2),
+                          const SizedBox(width: 7),
+                        ],
+                        Text(labels[i],
+                            style: AppType.body(size: 13.5, weight: FontWeight.w800, color: active == i ? p.ink : p.ink2)),
                       ],
-                      Text(labels[i],
-                          style: AppType.body(size: 13.5, weight: FontWeight.w800, color: active == i ? p.ink : p.ink2)),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -724,7 +742,9 @@ class HeroCard extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: gradient ?? [p.espresso, p.espresso2, const Color(0xFF5A2F1C)],
-          stops: const [0, 0.6, 1],
+          // stops only match the default 3-colour gradient; a custom gradient
+          // (e.g. the 2-colour reports hero) must not reuse them.
+          stops: gradient == null ? const [0, 0.6, 1] : null,
         ),
       ),
       child: Column(
@@ -742,7 +762,7 @@ class HeroCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(9)),
-                child: footer!,
+                child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: footer!),
               ),
             ),
           ],

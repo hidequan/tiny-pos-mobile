@@ -80,9 +80,11 @@ class AdminInvScreen extends StatelessWidget {
     final col = pct < 20 ? p.red : (pct < 40 ? p.amber : p.greenD);
     final barCol = pct < 20 ? p.red : (pct < 40 ? p.amber : p.green);
     return Container(
-      color: p.paper,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-      decoration: BoxDecoration(border: border ? Border(top: BorderSide(color: p.line)) : null),
+      decoration: BoxDecoration(
+        color: p.paper,
+        border: border ? Border(top: BorderSide(color: p.line)) : null,
+      ),
       child: Column(children: [
         Row(children: [
           LeadIcon(emoji: item.emoji, size: 38),

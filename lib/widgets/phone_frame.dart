@@ -41,7 +41,6 @@ class _PhoneFrameState extends State<PhoneFrame> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
           child: Container(
-            color: palette.cream,
             clipBehavior: Clip.hardEdge,
             decoration: BoxDecoration(color: palette.cream),
             child: PaletteScope(

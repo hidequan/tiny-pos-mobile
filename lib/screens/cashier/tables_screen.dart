@@ -73,8 +73,17 @@ class _TableCard extends StatelessWidget {
           children: [
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(table.id, style: AppType.display(size: 20, weight: FontWeight.w700, color: p.ink)),
-              const Spacer(),
-              AppBadge(meta[1] as String, color: meta[0] as BadgeColor, pulse: table.st == 'busy'),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: AppBadge(meta[1] as String, color: meta[0] as BadgeColor, pulse: table.st == 'busy'),
+                  ),
+                ),
+              ),
             ]),
             const SizedBox(height: 6),
             Row(children: [

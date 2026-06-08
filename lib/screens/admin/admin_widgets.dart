@@ -68,7 +68,7 @@ class BarChart extends StatelessWidget {
     final p = context.palette;
     final mx = values.reduce(math.max);
     return SizedBox(
-      height: 130,
+      height: 160,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
