@@ -35,6 +35,9 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+      - name: Test (walkthrough — fails the build on any crash/overflow)
+        run: flutter test
+
       - name: Build APK (release, debug-signed)
         run: flutter build apk --release
 
