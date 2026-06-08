@@ -54,3 +54,7 @@ build/tiny-pos-web.zip
 
 # Downloaded CI build artifacts
 artifacts/
+
+# Firebase service account (secret)
+firebase-sa.json
+*-service-account*.json
