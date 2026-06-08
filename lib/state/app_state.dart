@@ -54,6 +54,11 @@ class AppState extends ChangeNotifier {
   String kdsFilter = 'all';
   Timer? _kdsTimer;
 
+  /// Per-second tick for KDS timers. Bumping this (instead of notifyListeners)
+  /// lets ONLY the ticket timer/border repaint each second rather than rebuilding
+  /// the whole KDS screen (topbar, chips, stat boxes, every card).
+  final ValueNotifier<int> kdsTick = ValueNotifier<int>(0);
+
   // ---- admin ----
   String adminTab = 'home';
   String? adminSub; // sub-page inside "Thêm" (staff/promos/branches/shiftadmin)
@@ -321,7 +326,8 @@ class AppState extends ChangeNotifier {
       for (final t in kds) {
         t.ago++;
       }
-      notifyListeners();
+      // Only nudge the lightweight tick listeners, not the whole screen.
+      kdsTick.value++;
     });
   }
 
@@ -489,6 +495,7 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     _kdsTimer?.cancel();
+    kdsTick.dispose();
     super.dispose();
   }
 }

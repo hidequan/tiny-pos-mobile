@@ -94,6 +94,15 @@ class _TicketCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.read<AppState>();
+    // Rebuild only this card (timer text + accent colours) on each 1s tick,
+    // instead of rebuilding the whole KDS screen.
+    return ValueListenableBuilder<int>(
+      valueListenable: state.kdsTick,
+      builder: (context, _, _) => _card(context, state),
+    );
+  }
+
+  Widget _card(BuildContext context, AppState state) {
     final p = context.palette;
     final accent = ticket.ago >= 360 ? p.red : (ticket.ago >= 180 ? p.amber : p.green);
     final timerColor = ticket.ago >= 360 ? p.red : (ticket.ago >= 180 ? p.amber : p.greenD);

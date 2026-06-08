@@ -98,7 +98,14 @@ class _TableCard extends StatelessWidget {
                 decoration: BoxDecoration(border: Border(top: BorderSide(color: p.line2))),
                 child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                   Text('${table.min}p', style: AppType.body(size: 12, weight: FontWeight.w700, color: p.muted)),
-                  Text(vnd(table.total), style: AppType.body(size: 14, weight: FontWeight.w800, color: p.terracotta)),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(vnd(table.total), style: AppType.body(size: 14, weight: FontWeight.w800, color: p.terracotta)),
+                    ),
+                  ),
                 ]),
               )
             else
