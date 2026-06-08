@@ -42,7 +42,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - your-email@example.com   # <-- replace; gets the APK/AAB download links
+          - hidequan@gmail.com   # gets the APK/AAB download links
         notify:
           success: true
           failure: true
