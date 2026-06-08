@@ -179,6 +179,58 @@ void main() {
     expect(s2.cartCount, 1);
   });
 
+  testWidgets('Scan: profile sheets (cashier/kds/admin) + search clear', (t) async {
+    await boot(t);
+    // cashier profile (contains the dark-mode row)
+    await tap(t, txt('Thu ngân'));
+    await tap(t, txt('TB'));
+    noCrash(t, 'cashier profile sheet');
+    await tap(t, find.byIcon(Icons.close_rounded));
+    // search empty-state + clear restores grid
+    await t.enterText(find.byType(TextField).first, 'zzzzz');
+    await beat(t);
+    expect(find.text('Không tìm thấy món'), findsOneWidget);
+    await tap(t, find.byIcon(Icons.close_rounded)); // the X in the search field
+    expect(find.text('Cà phê sữa đá'), findsWidgets);
+    noCrash(t, 'search clear');
+  });
+
+  testWidgets('Scan: KDS profile sheet', (t) async {
+    await boot(t);
+    await tap(t, txt('KDS / Bar'));
+    await tap(t, txt('QD'));
+    noCrash(t, 'kds profile sheet');
+  });
+
+  testWidgets('Scan: admin profile + branch pick + add-promo + add-branch', (t) async {
+    await boot(t);
+    await tap(t, txt('Quản trị'));
+    await tap(t, txt('AN'));
+    noCrash(t, 'admin profile sheet');
+    await tap(t, find.byIcon(Icons.close_rounded));
+    await tap(t, txt('Cầu Giấy ▾'));
+    noCrash(t, 'branch pick sheet');
+    await tap(t, find.byIcon(Icons.close_rounded));
+    // add-promo form
+    await tap(t, txt('Thêm'));
+    await tap(t, txt('Khuyến mãi'));
+    await tap(t, txt('+ Tạo'));
+    noCrash(t, 'add-promo form');
+    await t.enterText(find.byType(TextField).first, 'KM Test');
+    await tap(t, txt('Lưu khuyến mãi'));
+    noCrash(t, 'submit add-promo');
+    expect(find.text('KM Test'), findsOneWidget);
+    // add-branch form
+    await tap(t, find.byIcon(Icons.chevron_left_rounded));
+    await tap(t, txt('Chi nhánh'));
+    await tap(t, txt('Thêm chi nhánh'));
+    noCrash(t, 'add-branch form');
+    await t.enterText(find.byType(TextField).first, 'CN Test');
+    await tap(t, txt('Lưu chi nhánh'));
+    noCrash(t, 'submit add-branch');
+    expect(find.text('CN Test'), findsOneWidget);
+  });
+
   testWidgets('Admin: all tabs + sub-pages + sheets', (t) async {
     await boot(t);
     await tap(t, txt('Quản trị'));

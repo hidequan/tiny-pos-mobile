@@ -326,16 +326,19 @@ class AppState extends ChangeNotifier {
   }
 
   void toggleKdsItem(String code, int idx) {
-    final t = kds.firstWhere((x) => x.code == code);
-    t.items[idx].ok = !t.items[idx].ok;
-    t.isNew = false;
+    final i = kds.indexWhere((x) => x.code == code);
+    if (i < 0 || idx < 0 || idx >= kds[i].items.length) return; // ticket bumped away
+    kds[i].items[idx].ok = !kds[i].items[idx].ok;
+    kds[i].isNew = false;
     notifyListeners();
   }
 
   void bumpTicket(String code) {
-    final t = kds.firstWhere((x) => x.code == code, orElse: () => kds.first);
-    kds.removeWhere((x) => x.code == code);
-    kdsDone.insert(0, KdsDone(code, fmtAgo(t.ago), t.items.fold(0, (a, i) => a + i.q)));
+    final i = kds.indexWhere((x) => x.code == code);
+    if (i < 0) return; // already removed (e.g. double tap)
+    final t = kds[i];
+    kds.removeAt(i);
+    kdsDone.insert(0, KdsDone(code, fmtAgo(t.ago), t.items.fold(0, (a, it) => a + it.q)));
     notifyListeners();
   }
 
