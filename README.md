@@ -102,6 +102,27 @@ flutter build ipa --release
 
 ---
 
+## Lấy APK test nhanh nhất — GitHub Actions (`.github/workflows/android.yml`)
+
+Repo: **https://github.com/hidequan/tiny-pos-mobile** (private).
+
+Mỗi lần push lên `main`, Actions tự build **APK + AAB** trên runner Linux (JDK17 + Flutter
+3.44.1 — không dính lỗi loopback của máy Windows) và đăng artifact tải về:
+
+```powershell
+gh run list                       # xem các lần build
+gh run watch <run-id>             # theo dõi tới khi xong
+gh run download <run-id> -n tiny-pos-apk -D .   # tải app-release.apk về
+# Hoặc: vào tab Actions trên GitHub → mở run → mục Artifacts → tải tiny-pos-apk
+```
+
+Cài lên giả lập/thiết bị: `adb install app-release.apk` (hoặc kéo-thả APK vào giả lập).
+Build thủ công không cần push: tab **Actions → Android build → Run workflow**, hoặc
+`gh workflow run "Android build (APK + AAB)"`.
+
+> APK này ký bằng **debug key** (đủ để test/giả lập). Bản phát hành store ký bằng upload
+> keystore — xem mục *Ký release Android*.
+
 ## CI/CD — Codemagic (`codemagic.yaml`)
 
 4 workflow:
