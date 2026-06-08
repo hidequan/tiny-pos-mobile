@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#D98A4E"/>
+      <stop offset="0.55" stop-color="#C75B39"/>
+      <stop offset="1" stop-color="#B14A2C"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <!-- steam -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="26" stroke-linecap="round" opacity="0.85">
+    <path d="M430 300 q-34 -46 0 -92 q34 -46 0 -92"/>
+    <path d="M512 300 q-34 -46 0 -92 q34 -46 0 -92"/>
+    <path d="M594 300 q-34 -46 0 -92 q34 -46 0 -92"/>
+  </g>
+  <!-- cup body -->
+  <path d="M300 380 h360 v150 a180 180 0 0 1 -360 0 z" fill="#FFFFFF"/>
+  <!-- handle -->
+  <path d="M660 400 h70 a96 96 0 0 1 0 192 h-46"
+        fill="none" stroke="#FFFFFF" stroke-width="46" stroke-linecap="round"/>
+  <!-- saucer -->
+  <ellipse cx="480" cy="742" rx="252" ry="46" fill="#FFFFFF"/>
+</svg>

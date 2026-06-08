@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3A1F12"/>
+      <stop offset="0.6" stop-color="#241008"/>
+      <stop offset="1" stop-color="#5A2F1C"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.8" cy="0.2" r="0.6">
+      <stop offset="0" stop-color="#D98A4E" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#D98A4E" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="500" fill="url(#bg)"/>
+  <rect width="1024" height="500" fill="url(#glow)"/>
+  <!-- logo tile -->
+  <rect x="96" y="150" width="200" height="200" rx="48" fill="#C75B39"/>
+  <g transform="translate(196 250) scale(0.34) translate(-480 -440)">
+    <g fill="none" stroke="#FFFFFF" stroke-width="26" stroke-linecap="round" opacity="0.9">
+      <path d="M430 300 q-34 -46 0 -92 q34 -46 0 -92"/>
+      <path d="M512 300 q-34 -46 0 -92 q34 -46 0 -92"/>
+      <path d="M594 300 q-34 -46 0 -92 q34 -46 0 -92"/>
+    </g>
+    <path d="M300 380 h360 v150 a180 180 0 0 1 -360 0 z" fill="#FFFFFF"/>
+    <path d="M660 400 h70 a96 96 0 0 1 0 192 h-46" fill="none" stroke="#FFFFFF" stroke-width="46" stroke-linecap="round"/>
+    <ellipse cx="480" cy="742" rx="252" ry="46" fill="#FFFFFF"/>
+  </g>
+  <text x="350" y="240" font-family="Georgia, serif" font-size="92" font-weight="700" fill="#FFFFFF">Tiny POS</text>
+  <text x="354" y="305" font-family="Segoe UI, Arial, sans-serif" font-size="34" fill="#E0D2BF">Bán hàng cho quán &amp; chuỗi cà phê</text>
+</svg>
