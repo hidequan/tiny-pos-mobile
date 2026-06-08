@@ -54,3 +54,21 @@ jobs:
           name: tiny-pos-aab
           path: build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
+
+      # Distributes the APK to testers via Firebase App Distribution, giving each
+      # tester an email + install link. Skipped automatically until the two repo
+      # secrets are set (Settings ▸ Secrets ▸ Actions, or `gh secret set`):
+      #   FIREBASE_APP_ID          -> e.g. 1:1234567890:android:abcdef0123
+      #   FIREBASE_SERVICE_ACCOUNT -> full JSON of a service account with the
+      #                               "Firebase App Distribution Admin" role
+      - name: Distribute to Firebase App Distribution
+        if: ${{ env.FIREBASE_APP_ID != '' }}
+        env:
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+        uses: wzieba/Firebase-Distribution-Github-Action@v1.7.0
+        with:
+          appId: ${{ secrets.FIREBASE_APP_ID }}
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          groups: testers
+          file: build/app/outputs/flutter-apk/app-release.apk
+          releaseNotes: "Tiny POS test build (auto from GitHub Actions)"
