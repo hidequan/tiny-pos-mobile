@@ -723,6 +723,83 @@ class Segmented extends StatelessWidget {
   }
 }
 
+/// A rounded search input matching the warm palette (added in v0.1.1).
+class SearchField extends StatefulWidget {
+  final String hint;
+  final String value;
+  final ValueChanged<String> onChanged;
+  final EdgeInsets margin;
+  const SearchField({
+    super.key,
+    required this.hint,
+    required this.value,
+    required this.onChanged,
+    this.margin = const EdgeInsets.fromLTRB(16, 0, 16, 10),
+  });
+
+  @override
+  State<SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends State<SearchField> {
+  late final TextEditingController _c = TextEditingController(text: widget.value);
+
+  @override
+  void didUpdateWidget(SearchField old) {
+    super.didUpdateWidget(old);
+    // Keep in sync when the value is cleared/changed externally.
+    if (widget.value != _c.text) _c.text = widget.value;
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Padding(
+      padding: widget.margin,
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: p.paper,
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: p.line2),
+        ),
+        child: Row(children: [
+          Icon(AppIcons.get('search'), size: 19, color: p.muted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _c,
+              onChanged: widget.onChanged,
+              style: AppType.body(size: 14.5, weight: FontWeight.w600, color: p.ink),
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: widget.hint,
+                hintStyle: AppType.body(size: 14.5, weight: FontWeight.w500, color: p.faint),
+              ),
+            ),
+          ),
+          if (_c.text.isNotEmpty)
+            GestureDetector(
+              onTap: () {
+                _c.clear();
+                widget.onChanged('');
+              },
+              child: Icon(Icons.close_rounded, size: 18, color: p.muted),
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
 /// `.hero` revenue gradient card.
 class HeroCard extends StatelessWidget {
   final String label;

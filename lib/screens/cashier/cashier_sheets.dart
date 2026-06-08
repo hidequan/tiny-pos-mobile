@@ -581,6 +581,20 @@ void openProfile(BuildContext context) {
               child: RowList([
                 ListRow(leading: LeadIcon(icon: 'store'), title: 'Chi nhánh Cầu Giấy', subtitle: '144 Xuân Thủy'),
                 ListRow(leading: LeadIcon(icon: 'clock'), title: 'Ca chiều', subtitle: '13:00 – 21:00'),
+                Container(
+                  color: p.paper,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                  child: Row(children: [
+                    LeadIcon(icon: 'settings'),
+                    const SizedBox(width: 13),
+                    Expanded(
+                      child: Text('Chế độ tối', style: AppType.body(size: 14.5, weight: FontWeight.w700, color: p.ink)),
+                    ),
+                    Consumer<AppState>(
+                      builder: (_, s, _) => SwitchDot(on: s.userDark, onTap: s.toggleDarkMode),
+                    ),
+                  ]),
+                ),
               ]),
             ),
           ]);

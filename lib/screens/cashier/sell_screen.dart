@@ -17,7 +17,11 @@ class SellScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final p = context.palette;
-    final list = state.productsForCat(state.cat);
+    var list = state.productsForCat(state.cat);
+    final q = state.sellSearch.trim().toLowerCase();
+    if (q.isNotEmpty) {
+      list = list.where((pr) => pr.name.toLowerCase().contains(q)).toList();
+    }
     final sub = state.otype == 'dinein'
         ? 'Tại bàn${state.table != null ? ' · ${state.table}' : ''} · Ca chiều'
         : 'Mang đi · Ca chiều';
@@ -32,6 +36,11 @@ class SellScreen extends StatelessWidget {
             Avatar('TB', onTap: () => openProfile(context)),
           ],
         ),
+        SearchField(
+          hint: 'Tìm món...',
+          value: state.sellSearch,
+          onChanged: state.setSellSearch,
+        ),
         ChipsRow(children: [
           for (final c in Seed.cats)
             PillChip(c.name, emoji: c.emoji, on: state.cat == c.id, onTap: () => state.setCat(c.id)),
@@ -39,17 +48,20 @@ class SellScreen extends StatelessWidget {
         Expanded(
           child: Stack(
             children: [
-              GridView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                  mainAxisExtent: 128,
+              if (list.isEmpty)
+                EmptyState(emoji: '🔍', title: 'Không tìm thấy món', sub: 'Thử từ khóa hoặc nhóm khác')
+              else
+                GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    mainAxisExtent: 128,
+                  ),
+                  itemCount: list.length,
+                  itemBuilder: (_, i) => _ProductCard(product: list[i]),
                 ),
-                itemCount: list.length,
-                itemBuilder: (_, i) => _ProductCard(product: list[i]),
-              ),
               if (state.cartCount > 0)
                 Positioned(left: 12, right: 12, bottom: 12, child: _CartBar(state: state)),
             ],

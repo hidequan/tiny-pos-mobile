@@ -23,12 +23,24 @@ class OrdersScreen extends StatelessWidget {
     const payLabels = {'cash': 'Tiền mặt', 'qr': 'Chuyển khoản', 'card': 'Thẻ', 'momo': 'MoMo'};
     final done = state.orders.where((o) => o.status == 'done').toList();
     final today = done.fold(0, (a, o) => a + o.total);
+    final oq = state.orderSearch.trim().toLowerCase();
+    final shown = oq.isEmpty
+        ? state.orders
+        : state.orders
+            .where((o) =>
+                o.code.toLowerCase().contains(oq) ||
+                (o.table ?? '').toLowerCase().contains(oq))
+            .toList();
 
     return Column(children: [
       TopBar(
         title: 'Đơn hàng',
         subtitle: Text('Hôm nay · ${done.length} đơn', style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
-        actions: [IconBtn('search', onTap: () => context.shell.toast('Tìm kiếm đơn', 'search'))],
+      ),
+      SearchField(
+        hint: 'Tìm theo mã đơn / bàn...',
+        value: state.orderSearch,
+        onChanged: state.setOrderSearch,
       ),
       Expanded(
         child: ListView(
@@ -44,12 +56,15 @@ class OrdersScreen extends StatelessWidget {
               ]),
             ),
             const SizedBox(height: 6),
+            if (shown.isEmpty)
+              const EmptyState(emoji: '🔍', title: 'Không tìm thấy đơn', sub: 'Thử mã đơn hoặc số bàn khác')
+            else
             CardBox(
               margin: const EdgeInsets.symmetric(horizontal: 16),
               clip: true,
               padding: EdgeInsets.zero,
               child: RowList([
-                for (final o in state.orders)
+                for (final o in shown)
                   ListRow(
                     onTap: () => context.shell.toast('Chi tiết đơn ${o.code}', 'receipt'),
                     leading: LeadIcon(

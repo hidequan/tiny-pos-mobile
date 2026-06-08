@@ -72,7 +72,7 @@ class LoginScreen extends StatelessWidget {
                 onTap: () => state.enterRole(Role.admin),
               ),
               const SizedBox(height: 30),
-              Text('v0.1.0 · chọn vai trò để xem giao diện tương ứng',
+              Text('v0.1.1 · chọn vai trò để xem giao diện tương ứng',
                   textAlign: TextAlign.center,
                   style: AppType.body(size: 11.5, weight: FontWeight.w500, color: Colors.white.withValues(alpha: 0.4))),
               const SizedBox(height: 24),

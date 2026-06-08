@@ -28,7 +28,7 @@ class AdminMoreScreen extends StatelessWidget {
     return Column(children: [
       TopBar(
         title: 'Quản lý',
-        subtitle: Text('Tiny POS · v0.1.0', style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
+        subtitle: Text('Tiny POS · v0.1.1', style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
         actions: [Avatar('AN', onTap: () => openAdminProfile(context))],
       ),
       Expanded(

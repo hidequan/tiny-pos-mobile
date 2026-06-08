@@ -92,12 +92,28 @@ class _SettingsHolderState extends State<_SettingsHolder> {
             SwitchDot(on: sw[key]!, onTap: () => setState(() => sw[key] = !sw[key]!)),
           ]),
         );
+    final state = context.watch<AppState>();
+    Widget darkRow() => Container(
+          color: p.paper,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          child: Row(children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                Text('Chế độ tối', style: AppType.body(size: 14.5, weight: FontWeight.w700, color: p.ink)),
+                const SizedBox(height: 2),
+                Text('Giao diện nền tối cho toàn app', style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
+              ]),
+            ),
+            SwitchDot(on: state.userDark, onTap: state.toggleDarkMode),
+          ]),
+        );
     return AppSheet(
       title: 'Cài đặt hệ thống',
       body: CardBox(
         clip: true,
         padding: EdgeInsets.zero,
         child: RowList([
+          darkRow(),
           toggleRow('vat', 'Thuế VAT', 'Áp dụng 8% trên hóa đơn'),
           toggleRow('print', 'In bill tự động', 'Sau khi thanh toán'),
           toggleRow('sound', 'Âm thanh đơn mới (KDS)', 'Chuông khi có đơn'),

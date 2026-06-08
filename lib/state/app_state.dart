@@ -60,7 +60,28 @@ class AppState extends ChangeNotifier {
   String invTab = 'stock';
   String repRange = '7 ngày';
 
-  bool get isDark => role == Role.kds;
+  // ---- v0.1.1: search + dark mode ----
+  String sellSearch = '';
+  String orderSearch = '';
+  bool userDark = false;
+
+  /// KDS is always dark; other roles follow the user's dark-mode preference.
+  bool get isDark => role == Role.kds || userDark;
+
+  void setSellSearch(String q) {
+    sellSearch = q;
+    notifyListeners();
+  }
+
+  void setOrderSearch(String q) {
+    orderSearch = q;
+    notifyListeners();
+  }
+
+  void toggleDarkMode() {
+    userDark = !userDark;
+    notifyListeners();
+  }
 
   // =================== ROLE ROUTER ===================
   void enterRole(Role r) {

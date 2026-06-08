@@ -119,6 +119,16 @@ void main() {
     noCrash(t, 'toggle shift');
   });
 
+  testWidgets('v0.1.1: product search filters the grid', (t) async {
+    await boot(t);
+    await tap(t, txt('Thu ngân'));
+    await t.enterText(find.byType(TextField).first, 'Latte');
+    await beat(t);
+    expect(find.text('Matcha Latte'), findsOneWidget);
+    expect(find.text('Espresso'), findsNothing); // filtered out
+    noCrash(t, 'product search filter');
+  });
+
   testWidgets('KDS: queue interactions + done + stats', (t) async {
     await boot(t);
     await tap(t, txt('KDS / Bar'));
