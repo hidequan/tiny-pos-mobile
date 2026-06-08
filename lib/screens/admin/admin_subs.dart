@@ -8,6 +8,7 @@ import '../../theme/typography.dart';
 import '../../widgets/common.dart';
 import '../../widgets/shell.dart';
 import 'admin_widgets.dart';
+import 'admin_sheets.dart';
 
 /// Nhân viên & RBAC.
 class StaffScreen extends StatelessWidget {
@@ -31,7 +32,7 @@ class StaffScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 16),
           children: [
-            SectionHeader('Danh sách nhân viên', action: '+ Thêm', onAction: () => context.shell.toast('Thêm nhân viên mới', 'plus')),
+            SectionHeader('Danh sách nhân viên', action: '+ Thêm', onAction: () => openAddStaff(context)),
             CardBox(
               margin: const EdgeInsets.symmetric(horizontal: 16),
               clip: true,
@@ -117,7 +118,7 @@ class PromosScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 20),
           children: [
-            SectionHeader('Chương trình', action: '+ Tạo', onAction: () => context.shell.toast('Tạo khuyến mãi mới', 'plus')),
+            SectionHeader('Chương trình', action: '+ Tạo', onAction: () => openAddPromo(context)),
             CardBox(
               margin: const EdgeInsets.symmetric(horizontal: 16),
               clip: true,
@@ -181,7 +182,7 @@ class BranchesScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
               child: AppButton('Thêm chi nhánh', icon: 'plus', block: true, variant: BtnVariant.ghost,
-                  onTap: () => context.shell.toast('Thêm chi nhánh mới', 'plus')),
+                  onTap: () => openAddBranch(context)),
             ),
           ],
         ),

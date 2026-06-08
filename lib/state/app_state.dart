@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/models.dart';
 import '../data/seed.dart';
@@ -80,6 +82,7 @@ class AppState extends ChangeNotifier {
 
   void toggleDarkMode() {
     userDark = !userDark;
+    _save();
     notifyListeners();
   }
 
@@ -193,6 +196,7 @@ class AppState extends ChangeNotifier {
       mods: o,
       station: (p.cat == 'cake' || p.cat == 'top') ? 'kitchen' : 'bar',
     ));
+    _save();
     notifyListeners();
   }
 
@@ -200,12 +204,14 @@ class AppState extends ChangeNotifier {
     final c = cart.firstWhere((x) => x.lid == lid);
     c.qty += d;
     if (c.qty <= 0) cart.removeWhere((x) => x.lid == lid);
+    _save();
     notifyListeners();
   }
 
   void clearCart() {
     cart.clear();
     disc = false;
+    _save();
     notifyListeners();
   }
 
@@ -278,6 +284,7 @@ class AppState extends ChangeNotifier {
     disc = false;
     table = null;
     otype = 'takeaway';
+    _save();
     notifyListeners();
     return code;
   }
@@ -289,6 +296,7 @@ class AppState extends ChangeNotifier {
 
   void toggleShift() {
     shiftOpen = !shiftOpen;
+    _save();
     notifyListeners();
   }
 
@@ -412,6 +420,67 @@ class AppState extends ChangeNotifier {
   void togglePromo(int i) {
     promos[i].on = !promos[i].on;
     notifyListeners();
+  }
+
+  // ---- v0.1.2: real add-forms ----
+  void addStaff(String name, String role, String phone, String branch) {
+    staff.insert(0, Staff('s${DateTime.now().microsecondsSinceEpoch}', name, role, phone, branch, true));
+    notifyListeners();
+  }
+
+  void addPromo(String name, String desc, String type, String emoji) {
+    promos.insert(0, Promo(name, desc, type.isNotEmpty ? type : 'Mới', true, emoji.isNotEmpty ? emoji : '🎁'));
+    notifyListeners();
+  }
+
+  void addBranch(String name, String addr) {
+    branches.add(Branch('b${DateTime.now().microsecondsSinceEpoch}', name, addr, 0, 0, true));
+    notifyListeners();
+  }
+
+  // =================== PERSISTENCE (v0.1.2) ===================
+  static const _key = 'tinypos_state_v1';
+  SharedPreferences? _prefs;
+
+  /// Loads persisted state (theme, shift, cart, orders) on startup.
+  Future<void> load() async {
+    _prefs = await SharedPreferences.getInstance();
+    final raw = _prefs?.getString(_key);
+    if (raw == null) return;
+    try {
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      userDark = (j['userDark'] as bool?) ?? false;
+      shiftOpen = (j['shiftOpen'] as bool?) ?? true;
+      _orderId = (j['orderId'] as int?) ?? _orderId;
+      if (j['cart'] is List) {
+        cart
+          ..clear()
+          ..addAll((j['cart'] as List).map((e) => CartLine.fromJson(Map<String, dynamic>.from(e as Map))));
+      }
+      if (j['orders'] is List) {
+        orders
+          ..clear()
+          ..addAll((j['orders'] as List).map((e) => Order.fromJson(Map<String, dynamic>.from(e as Map))));
+      }
+    } catch (_) {
+      // Corrupt blob — ignore and start fresh.
+    }
+    notifyListeners();
+  }
+
+  void _save() {
+    final p = _prefs;
+    if (p == null) return;
+    p.setString(
+      _key,
+      jsonEncode({
+        'userDark': userDark,
+        'shiftOpen': shiftOpen,
+        'orderId': _orderId,
+        'cart': cart.map((c) => c.toJson()).toList(),
+        'orders': orders.map((o) => o.toJson()).toList(),
+      }),
+    );
   }
 
   @override

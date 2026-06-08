@@ -53,6 +53,24 @@ class ModSel {
     this.extra = 0,
   });
 
+  Map<String, dynamic> toJson() => {
+        'size': size,
+        'sugar': sugar,
+        'ice': ice,
+        'tops': tops,
+        'note': note,
+        'extra': extra,
+      };
+
+  factory ModSel.fromJson(Map<String, dynamic> j) => ModSel(
+        size: j['size'] as String?,
+        sugar: j['sugar'] as String?,
+        ice: j['ice'] as String?,
+        tops: (j['tops'] as List?)?.map((e) => e as String).toList() ?? const [],
+        note: (j['note'] as String?) ?? '',
+        extra: (j['extra'] as int?) ?? 0,
+      );
+
   /// Human-readable modifier summary — port of `modText(o)`.
   String get text {
     final hasAny = (size != null && size!.isNotEmpty) ||
@@ -91,6 +109,28 @@ class CartLine {
     required this.mods,
     required this.station,
   });
+
+  Map<String, dynamic> toJson() => {
+        'lid': lid,
+        'pid': pid,
+        'name': name,
+        'emoji': emoji,
+        'price': price,
+        'qty': qty,
+        'mods': mods.toJson(),
+        'station': station,
+      };
+
+  factory CartLine.fromJson(Map<String, dynamic> j) => CartLine(
+        lid: j['lid'] as String,
+        pid: j['pid'] as String,
+        name: j['name'] as String,
+        emoji: j['emoji'] as String,
+        price: j['price'] as int,
+        qty: j['qty'] as int,
+        mods: ModSel.fromJson(Map<String, dynamic>.from(j['mods'] as Map)),
+        station: j['station'] as String,
+      );
 }
 
 class Order {
@@ -103,6 +143,20 @@ class Order {
   final String status; // done | void | pending
   final int min;
   Order(this.code, this.type, this.table, this.items, this.total, this.pay, this.status, this.min);
+
+  Map<String, dynamic> toJson() =>
+      {'code': code, 'type': type, 'table': table, 'items': items, 'total': total, 'pay': pay, 'status': status, 'min': min};
+
+  factory Order.fromJson(Map<String, dynamic> j) => Order(
+        j['code'] as String,
+        j['type'] as String,
+        j['table'] as String?,
+        j['items'] as int,
+        j['total'] as int,
+        j['pay'] as String,
+        j['status'] as String,
+        j['min'] as int,
+      );
 }
 
 class TableModel {

@@ -308,6 +308,188 @@ class _AddProductSheetState extends State<_AddProductSheet> {
   }
 }
 
+/// Generic single-field dropdown (v0.1.2 add-forms).
+Widget _dropdown(BuildContext context, String value, List<MapEntry<String, String>> items, ValueChanged<String> onChanged) {
+  final p = context.palette;
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14),
+    decoration: BoxDecoration(color: p.paper, borderRadius: BorderRadius.circular(13), border: Border.all(color: p.line2, width: 1.5)),
+    child: DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: value,
+        isExpanded: true,
+        dropdownColor: p.paper,
+        style: AppType.body(size: 14.5, weight: FontWeight.w600, color: p.ink),
+        items: [for (final e in items) DropdownMenuItem(value: e.key, child: Text(e.value))],
+        onChanged: (v) => v != null ? onChanged(v) : null,
+      ),
+    ),
+  );
+}
+
+/// Add-staff form (v0.1.2).
+void openAddStaff(BuildContext context) => context.shell.showSheet((_) => const _AddStaffSheet());
+
+class _AddStaffSheet extends StatefulWidget {
+  const _AddStaffSheet();
+  @override
+  State<_AddStaffSheet> createState() => _AddStaffSheetState();
+}
+
+class _AddStaffSheetState extends State<_AddStaffSheet> {
+  final _name = TextEditingController();
+  final _phone = TextEditingController();
+  String _role = 'cashier';
+  String _branch = 'Cầu Giấy';
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final state = context.read<AppState>();
+    return AppSheet(
+      title: 'Thêm nhân viên',
+      body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _fieldLabel(context, 'Họ tên'),
+        TextField(controller: _name, decoration: _dec(context, 'VD: Nguyễn Văn A'), style: AppType.body(color: p.ink)),
+        const SizedBox(height: 12),
+        _fieldLabel(context, 'Số điện thoại'),
+        TextField(controller: _phone, keyboardType: TextInputType.phone, decoration: _dec(context, '09xx xxx xxx'), style: AppType.body(color: p.ink)),
+        const SizedBox(height: 12),
+        _fieldLabel(context, 'Vai trò'),
+        _dropdown(context, _role, const [
+          MapEntry('admin', '⚙️ Quản trị'),
+          MapEntry('cashier', '🧾 Thu ngân'),
+          MapEntry('barista', '🍳 Pha chế'),
+        ], (v) => setState(() => _role = v)),
+        const SizedBox(height: 12),
+        _fieldLabel(context, 'Chi nhánh'),
+        _dropdown(context, _branch, [for (final b in state.branches) MapEntry(b.name, b.name)], (v) => setState(() => _branch = v)),
+      ]),
+      footer: AppButton('Lưu nhân viên', icon: 'check', large: true, block: true, onTap: () {
+        final name = _name.text.trim();
+        if (name.isEmpty) {
+          context.shell.toast('Nhập họ tên', 'edit');
+          return;
+        }
+        state.addStaff(name, _role, _phone.text.trim(), _branch);
+        context.shell.closeSheet();
+        context.shell.toast('Đã thêm $name', 'check');
+      }),
+    );
+  }
+}
+
+/// Add-promo form (v0.1.2).
+void openAddPromo(BuildContext context) => context.shell.showSheet((_) => const _AddPromoSheet());
+
+class _AddPromoSheet extends StatefulWidget {
+  const _AddPromoSheet();
+  @override
+  State<_AddPromoSheet> createState() => _AddPromoSheetState();
+}
+
+class _AddPromoSheetState extends State<_AddPromoSheet> {
+  final _name = TextEditingController();
+  final _desc = TextEditingController();
+  final _type = TextEditingController();
+  final _emoji = TextEditingController();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _desc.dispose();
+    _type.dispose();
+    _emoji.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final state = context.read<AppState>();
+    return AppSheet(
+      title: 'Tạo khuyến mãi',
+      body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _fieldLabel(context, 'Tên chương trình'),
+        TextField(controller: _name, decoration: _dec(context, 'VD: Giờ vàng 14h–16h'), style: AppType.body(color: p.ink)),
+        const SizedBox(height: 12),
+        _fieldLabel(context, 'Mô tả'),
+        TextField(controller: _desc, decoration: _dec(context, 'VD: Giảm 20% toàn menu'), style: AppType.body(color: p.ink)),
+        const SizedBox(height: 12),
+        _fieldLabel(context, 'Nhãn (badge)'),
+        TextField(controller: _type, decoration: _dec(context, 'VD: -20%'), style: AppType.body(color: p.ink)),
+        const SizedBox(height: 12),
+        _fieldLabel(context, 'Biểu tượng (emoji)'),
+        TextField(controller: _emoji, maxLength: 2, decoration: _dec(context, '🎁'), style: AppType.body(color: p.ink)),
+      ]),
+      footer: AppButton('Lưu khuyến mãi', icon: 'check', large: true, block: true, onTap: () {
+        final name = _name.text.trim();
+        if (name.isEmpty) {
+          context.shell.toast('Nhập tên chương trình', 'edit');
+          return;
+        }
+        state.addPromo(name, _desc.text.trim(), _type.text.trim(), _emoji.text.trim());
+        context.shell.closeSheet();
+        context.shell.toast('Đã tạo $name', 'check');
+      }),
+    );
+  }
+}
+
+/// Add-branch form (v0.1.2).
+void openAddBranch(BuildContext context) => context.shell.showSheet((_) => const _AddBranchSheet());
+
+class _AddBranchSheet extends StatefulWidget {
+  const _AddBranchSheet();
+  @override
+  State<_AddBranchSheet> createState() => _AddBranchSheetState();
+}
+
+class _AddBranchSheetState extends State<_AddBranchSheet> {
+  final _name = TextEditingController();
+  final _addr = TextEditingController();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _addr.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final state = context.read<AppState>();
+    return AppSheet(
+      title: 'Thêm chi nhánh',
+      body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _fieldLabel(context, 'Tên chi nhánh'),
+        TextField(controller: _name, decoration: _dec(context, 'VD: Hoàn Kiếm'), style: AppType.body(color: p.ink)),
+        const SizedBox(height: 12),
+        _fieldLabel(context, 'Địa chỉ'),
+        TextField(controller: _addr, decoration: _dec(context, 'VD: 12 Hàng Bài, Hoàn Kiếm'), style: AppType.body(color: p.ink)),
+      ]),
+      footer: AppButton('Lưu chi nhánh', icon: 'check', large: true, block: true, onTap: () {
+        final name = _name.text.trim();
+        if (name.isEmpty) {
+          context.shell.toast('Nhập tên chi nhánh', 'edit');
+          return;
+        }
+        state.addBranch(name, _addr.text.trim());
+        context.shell.closeSheet();
+        context.shell.toast('Đã thêm $name', 'check');
+      }),
+    );
+  }
+}
+
 Widget _catDropdown(BuildContext context, String value, ValueChanged<String> onChanged) {
   final p = context.palette;
   final cats = Seed.cats.where((c) => c.id != 'all').toList();

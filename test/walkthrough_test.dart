@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tiny_pos_mobile/main.dart';
+import 'package:tiny_pos_mobile/state/app_state.dart';
 
 /// Walks every role / tab / sheet and asserts NO exception (crash, RenderFlex
 /// overflow, null deref, bad state) is thrown while building or interacting.
@@ -148,6 +150,33 @@ void main() {
     noCrash(t, 'kds done tab');
     await tap(t, txt('Thống kê'));
     noCrash(t, 'kds stats tab');
+  });
+
+  testWidgets('v0.1.2: add-staff form appends a member', (t) async {
+    await boot(t);
+    await tap(t, txt('Quản trị'));
+    await tap(t, txt('Thêm'));
+    await tap(t, txt('Nhân viên & phân quyền'));
+    await tap(t, txt('+ Thêm'));
+    noCrash(t, 'open add-staff form');
+    await t.enterText(find.byType(TextField).first, 'Nguyễn Test');
+    await tap(t, txt('Lưu nhân viên'));
+    noCrash(t, 'submit add-staff');
+    expect(find.text('Nguyễn Test'), findsOneWidget);
+  });
+
+  testWidgets('v0.1.2: state persists cart + theme across instances', (t) async {
+    SharedPreferences.setMockInitialValues({});
+    final s1 = AppState();
+    await s1.load();
+    s1.toggleDarkMode();
+    s1.addSimple(s1.products.firstWhere((p) => p.id == 'p4')); // Espresso (no options)
+    expect(s1.cartCount, 1);
+
+    final s2 = AppState();
+    await s2.load();
+    expect(s2.userDark, isTrue);
+    expect(s2.cartCount, 1);
   });
 
   testWidgets('Admin: all tabs + sub-pages + sheets', (t) async {
