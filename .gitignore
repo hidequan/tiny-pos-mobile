@@ -51,3 +51,6 @@ android/key.properties
 
 # Codemagic / local tooling
 build/tiny-pos-web.zip
+
+# Downloaded CI build artifacts
+artifacts/
