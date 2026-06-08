@@ -1,0 +1,35 @@
+{
+    "name": "Tiny POS",
+    "short_name": "Tiny POS",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#E9E0D2",
+    "theme_color": "#C75B39",
+    "description": "Tiny POS - he thong ban hang chuoi ca phe",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

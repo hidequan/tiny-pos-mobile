@@ -1,0 +1,137 @@
+# Codemagic CI/CD for Tiny POS (Flutter).
+# Docs: https://docs.codemagic.io/yaml/yaml-getting-started/
+#
+# Credentials are NOT committed. Configure them in the Codemagic UI:
+#   - Teams ▸ Integrations ▸ Developer Portal (App Store Connect API key)  -> ref name: tiny_appstore
+#   - App settings ▸ Environment variables ▸ groups:
+#       * google_play  : GCLOUD_SERVICE_ACCOUNT_CREDENTIALS  (Play service-account JSON)
+#       * android_signing (or use Codemagic "Android code signing" UI reference: tiny_keystore)
+#       * ios_signing via App Store Connect integration + automatic code signing
+#
+# Until store credentials exist, the artifact-only workflows (build APK / AAB / web)
+# run end-to-end with no secrets. The publishing blocks are commented where they need keys.
+
+definitions:
+  flutter_version: &flutter_version stable
+
+workflows:
+  # ----------------------------------------------------------------------------
+  # 1) Android — build a debug-signable APK + release AAB as downloadable artifacts.
+  #    No store credentials required. Use the APK to side-load on an emulator/device.
+  # ----------------------------------------------------------------------------
+  android-artifacts:
+    name: Android · APK + AAB (test artifacts)
+    instance_type: linux_x2
+    max_build_duration: 60
+    environment:
+      flutter: *flutter_version
+      java: 17
+    scripts:
+      - name: Flutter packages get
+        script: flutter pub get
+      - name: Static analysis
+        script: flutter analyze
+      - name: Build APK (release, default debug-keystore signing if unset)
+        script: flutter build apk --release
+      - name: Build App Bundle (AAB)
+        script: flutter build appbundle --release
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/bundle/release/*.aab
+      - build/app/outputs/**/mapping.txt
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com   # <-- replace; gets the APK/AAB download links
+        notify:
+          success: true
+          failure: true
+
+  # ----------------------------------------------------------------------------
+  # 2) Android — release AAB signed + uploaded to Google Play internal testing.
+  #    Requires: android_signing group (keystore) + google_play group (service acct).
+  # ----------------------------------------------------------------------------
+  android-playstore:
+    name: Android · Google Play (internal track)
+    instance_type: linux_x2
+    max_build_duration: 60
+    environment:
+      flutter: *flutter_version
+      java: 17
+      groups:
+        - google_play          # GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+      android_signing:
+        - tiny_keystore        # configure under: App settings ▸ Code signing identities
+    scripts:
+      - name: Flutter packages get
+        script: flutter pub get
+      - name: Set up local.properties
+        script: echo "flutter.sdk=$HOME/programs/flutter" > "$CM_BUILD_DIR/android/local.properties"
+      - name: Build signed AAB
+        script: flutter build appbundle --release
+    artifacts:
+      - build/app/outputs/bundle/release/*.aab
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+        submit_as_draft: false
+
+  # ----------------------------------------------------------------------------
+  # 3) iOS — build + sign + upload to TestFlight via App Store Connect API key.
+  #    Requires: an App Store Connect API integration named "tiny_appstore" and a
+  #    registered bundle id (com.tinypos.tinyPosMobile or your chosen id).
+  # ----------------------------------------------------------------------------
+  ios-testflight:
+    name: iOS · TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 90
+    integrations:
+      app_store_connect: tiny_appstore
+    environment:
+      flutter: *flutter_version
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.tinypos.tinyPosMobile   # must match Xcode + App Store Connect
+    scripts:
+      - name: Flutter packages get
+        script: flutter pub get
+      - name: Install CocoaPods
+        script: find . -name "Podfile" -execdir pod install \;
+      - name: Set up code signing
+        script: xcode-project use-profiles
+      - name: Build IPA
+        script: |
+          flutter build ipa --release \
+            --export-options-plist=$HOME/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        # Add internal/external tester groups once they exist in App Store Connect:
+        # beta_groups:
+        #   - Tiny POS Testers
+
+  # ----------------------------------------------------------------------------
+  # 4) Web — build the PWA bundle (the fixed-mobile-width app) as an artifact.
+  # ----------------------------------------------------------------------------
+  web-build:
+    name: Web · PWA build
+    instance_type: linux_x2
+    max_build_duration: 30
+    environment:
+      flutter: *flutter_version
+    scripts:
+      - name: Flutter packages get
+        script: flutter pub get
+      - name: Build web (release)
+        script: flutter build web --release
+      - name: Zip web bundle
+        script: cd build/web && zip -r ../tiny-pos-web.zip .
+    artifacts:
+      - build/tiny-pos-web.zip

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "tiny-pos-web",
+      "runtimeExecutable": "D:\\JOB\\node.exe",
+      "runtimeArgs": ["tool/serve_web.cjs"],
+      "port": 8099
+    }
+  ]
+}

@@ -1,0 +1,403 @@
+import 'dart:async';
+import 'dart:math';
+import 'package:flutter/foundation.dart';
+
+import '../data/models.dart';
+import '../data/seed.dart';
+
+/// Central app state + business logic. A faithful port of the `S` state object
+/// and the mutation functions in `tinypos.html`.
+class AppState extends ChangeNotifier {
+  // ---- session / role ----
+  Role? role;
+
+  // ---- cashier ----
+  String cashTab = 'sell';
+  String cat = 'all';
+  final List<CartLine> cart = [];
+  String otype = 'takeaway'; // takeaway | dinein
+  String? table;
+  bool disc = false;
+  bool shiftOpen = true;
+
+  // ---- mutable seed data ----
+  final List<Product> products = Seed.products();
+  final List<Order> orders = Seed.orders();
+  final List<TableModel> tables = Seed.tables();
+  List<KdsTicket> kds = Seed.kds();
+  final List<KdsDone> kdsDone = Seed.kdsDone();
+  final List<InvItem> inventory = Seed.inventory();
+  final List<Staff> staff = Seed.staff();
+  final List<Promo> promos = Seed.promos();
+  final List<Branch> branches = Seed.branches();
+
+  int _orderId = 1043;
+
+  // ---- product option draft ----
+  String? draftPid;
+  int draftSize = 1;
+  int draftSugar = 1;
+  int draftIce = 1;
+  final List<int> draftTops = [];
+  int draftQty = 1;
+  String draftNote = '';
+
+  // ---- payment ----
+  int payTotal = 0;
+  String payMethod = 'cash';
+  int received = 0;
+
+  // ---- kds ----
+  String kdsTab = 'queue';
+  String kdsFilter = 'all';
+  Timer? _kdsTimer;
+
+  // ---- admin ----
+  String adminTab = 'home';
+  String? adminSub; // sub-page inside "Thêm" (staff/promos/branches/shiftadmin)
+  String adminBranch = 'Cầu Giấy';
+  String adminCat = 'all';
+  String invTab = 'stock';
+  String repRange = '7 ngày';
+
+  bool get isDark => role == Role.kds;
+
+  // =================== ROLE ROUTER ===================
+  void enterRole(Role r) {
+    role = r;
+    if (r == Role.cashier) cashTab = 'sell';
+    if (r == Role.kds) {
+      kdsTab = 'queue';
+      _startKdsTimer();
+    }
+    if (r == Role.admin) adminTab = 'home';
+    notifyListeners();
+  }
+
+  void logout() {
+    role = null;
+    _kdsTimer?.cancel();
+    notifyListeners();
+  }
+
+  // =================== CASHIER ===================
+  void setCashTab(String t) {
+    cashTab = t;
+    notifyListeners();
+  }
+
+  void setCat(String c) {
+    cat = c;
+    notifyListeners();
+  }
+
+  List<Product> productsForCat(String c) =>
+      products.where((p) => c == 'all' || p.cat == c).toList();
+
+  int qtyForProduct(String pid) =>
+      cart.where((c) => c.pid == pid).fold(0, (a, c) => a + c.qty);
+
+  int get cartCount => cart.fold(0, (a, c) => a + c.qty);
+  int get cartSubtotal => cart.fold(0, (a, c) => a + c.price * c.qty);
+
+  // ---- product options draft ----
+  void startDraft(String pid) {
+    draftPid = pid;
+    draftSize = Seed.sizeOpts.indexWhere((o) => o.def);
+    draftSugar = Seed.sugarOpts.indexWhere((o) => o.def);
+    draftIce = Seed.iceOpts.indexWhere((o) => o.def);
+    draftTops.clear();
+    draftQty = 1;
+    draftNote = '';
+    notifyListeners();
+  }
+
+  void draftSet(String key, int v) {
+    if (key == 'size') draftSize = v;
+    if (key == 'sugar') draftSugar = v;
+    if (key == 'ice') draftIce = v;
+    notifyListeners();
+  }
+
+  void draftToggleTop(int i) {
+    if (draftTops.contains(i)) {
+      draftTops.remove(i);
+    } else {
+      draftTops.add(i);
+    }
+    notifyListeners();
+  }
+
+  void draftSetQty(int d) {
+    draftQty = max(1, draftQty + d);
+    notifyListeners();
+  }
+
+  int draftUnitPrice() {
+    final p = products.firstWhere((x) => x.id == draftPid);
+    return p.price +
+        Seed.sizeOpts[draftSize].price +
+        draftTops.fold(0, (a, i) => a + Seed.topOpts[i].price);
+  }
+
+  void confirmDraft() {
+    final p = products.firstWhere((x) => x.id == draftPid);
+    final extra = Seed.sizeOpts[draftSize].price +
+        draftTops.fold<int>(0, (a, i) => a + Seed.topOpts[i].price);
+    _addLine(
+      p,
+      ModSel(
+        size: Seed.sizeOpts[draftSize].name,
+        sugar: Seed.sugarOpts[draftSugar].name,
+        ice: Seed.iceOpts[draftIce].name,
+        tops: draftTops.map((i) => Seed.topOpts[i].name).toList(),
+        note: draftNote,
+        extra: extra,
+      ),
+      draftQty,
+    );
+  }
+
+  /// Add a product with no options directly to the cart.
+  void addSimple(Product p) => _addLine(p, const ModSel(), 1);
+
+  void _addLine(Product p, ModSel o, int qty) {
+    cart.add(CartLine(
+      lid: '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(99999)}',
+      pid: p.id,
+      name: p.name,
+      emoji: p.emoji,
+      price: p.price + o.extra,
+      qty: qty,
+      mods: o,
+      station: (p.cat == 'cake' || p.cat == 'top') ? 'kitchen' : 'bar',
+    ));
+    notifyListeners();
+  }
+
+  void cartQty(String lid, int d) {
+    final c = cart.firstWhere((x) => x.lid == lid);
+    c.qty += d;
+    if (c.qty <= 0) cart.removeWhere((x) => x.lid == lid);
+    notifyListeners();
+  }
+
+  void clearCart() {
+    cart.clear();
+    disc = false;
+    notifyListeners();
+  }
+
+  void setOtype(String t) {
+    otype = t;
+    notifyListeners();
+  }
+
+  void toggleDisc() {
+    disc = !disc;
+    notifyListeners();
+  }
+
+  void openTableForSale(String id) {
+    otype = 'dinein';
+    table = id;
+    cashTab = 'sell';
+    notifyListeners();
+  }
+
+  // ---- totals ----
+  int get discountAmount => disc ? (cartSubtotal * 0.2).round() : 0;
+  int get cartTotal => cartSubtotal - discountAmount;
+
+  // ---- payment ----
+  void openPay(int total) {
+    payTotal = total;
+    payMethod = 'cash';
+    received = 0;
+    notifyListeners();
+  }
+
+  void setPay(String m) {
+    payMethod = m;
+    received = 0;
+    notifyListeners();
+  }
+
+  void setReceived(int v) {
+    received = v;
+    notifyListeners();
+  }
+
+  /// Completes the current cart order: pushes to KDS, records the order, and
+  /// resets the cart. Returns the order code for the success screen.
+  String completeOrder() {
+    final code = '#${++_orderId}';
+    final sub = cartSubtotal;
+    final d = disc ? (sub * 0.2).round() : 0;
+    final tot = sub - d;
+    kds.insert(
+      0,
+      KdsTicket(
+        code: code,
+        type: otype,
+        table: otype == 'dinein' ? (table ?? '—') : null,
+        ago: 0,
+        isNew: true,
+        station: 'mix',
+        items: cart
+            .map((c) => KdsItem(c.qty, c.name, c.mods.text, false, c.station))
+            .toList(),
+      ),
+    );
+    orders.insert(
+      0,
+      Order(code, otype, otype == 'dinein' ? table : null, cartCount, tot, payMethod, 'done', 0),
+    );
+    cart.clear();
+    disc = false;
+    table = null;
+    otype = 'takeaway';
+    notifyListeners();
+    return code;
+  }
+
+  void afterPay() {
+    cashTab = 'sell';
+    notifyListeners();
+  }
+
+  void toggleShift() {
+    shiftOpen = !shiftOpen;
+    notifyListeners();
+  }
+
+  // =================== KDS ===================
+  void setKdsTab(String t) {
+    kdsTab = t;
+    notifyListeners();
+  }
+
+  void setKdsFilter(String f) {
+    kdsFilter = f;
+    notifyListeners();
+  }
+
+  void _startKdsTimer() {
+    _kdsTimer?.cancel();
+    _kdsTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (role != Role.kds) {
+        _kdsTimer?.cancel();
+        return;
+      }
+      for (final t in kds) {
+        t.ago++;
+      }
+      notifyListeners();
+    });
+  }
+
+  void toggleKdsItem(String code, int idx) {
+    final t = kds.firstWhere((x) => x.code == code);
+    t.items[idx].ok = !t.items[idx].ok;
+    t.isNew = false;
+    notifyListeners();
+  }
+
+  void bumpTicket(String code) {
+    final t = kds.firstWhere((x) => x.code == code, orElse: () => kds.first);
+    kds.removeWhere((x) => x.code == code);
+    kdsDone.insert(0, KdsDone(code, fmtAgo(t.ago), t.items.fold(0, (a, i) => a + i.q)));
+    notifyListeners();
+  }
+
+  // =================== ADMIN ===================
+  void setAdminTab(String t) {
+    adminTab = t;
+    adminSub = null;
+    notifyListeners();
+  }
+
+  void openAdminSub(String? sub) {
+    adminSub = sub;
+    notifyListeners();
+  }
+
+  void setAdminBranch(String n) {
+    adminBranch = n;
+    notifyListeners();
+  }
+
+  Branch get curBranch =>
+      branches.firstWhere((b) => b.name == adminBranch, orElse: () => branches.first);
+
+  void setAdminCat(String c) {
+    adminCat = c;
+    notifyListeners();
+  }
+
+  void setInvTab(String t) {
+    invTab = t;
+    notifyListeners();
+  }
+
+  void setRepRange(String r) {
+    repRange = r;
+    notifyListeners();
+  }
+
+  void toggleAvail(String id) {
+    final p = products.firstWhere((x) => x.id == id);
+    p.sold = !p.sold;
+    notifyListeners();
+  }
+
+  void saveProduct(String id, String name, int price, String cat, bool sold) {
+    final p = products.firstWhere((x) => x.id == id);
+    p.name = name.isNotEmpty ? name : p.name;
+    p.price = price > 0 ? price : p.price;
+    p.cat = cat;
+    p.sold = sold;
+    notifyListeners();
+  }
+
+  void deleteProduct(String id) {
+    products.removeWhere((x) => x.id == id);
+    notifyListeners();
+  }
+
+  void addProduct(String name, String cat, int price, String emoji) {
+    products.insert(
+      0,
+      Product(
+        id: 'np${DateTime.now().microsecondsSinceEpoch}',
+        name: name,
+        cat: cat,
+        price: price,
+        emoji: emoji.isNotEmpty ? emoji : '🥤',
+        opt: false,
+        sold: false,
+      ),
+    );
+    adminCat = 'all';
+    notifyListeners();
+  }
+
+  void toggleStaff(String id) {
+    final s = staff.firstWhere((x) => x.id == id);
+    s.active = !s.active;
+    notifyListeners();
+  }
+
+  void togglePromo(int i) {
+    promos[i].on = !promos[i].on;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _kdsTimer?.cancel();
+    super.dispose();
+  }
+}
+
+String fmtAgo(int s) => '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';

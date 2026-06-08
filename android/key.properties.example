@@ -1,0 +1,10 @@
+# Copy to android/key.properties and fill in to sign RELEASE builds locally.
+# Generate an upload keystore first:
+#   keytool -genkey -v -keystore upload-keystore.jks -storetype JKS \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+# Then set the paths/passwords below. android/key.properties is gitignored.
+storePassword=changeme
+keyPassword=changeme
+keyAlias=upload
+# Absolute path or path relative to android/app, e.g. ../../upload-keystore.jks
+storeFile=../../upload-keystore.jks
