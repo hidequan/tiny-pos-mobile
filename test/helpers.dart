@@ -5,6 +5,7 @@ import 'package:tiny_pos_mobile/main.dart';
 import 'package:tiny_pos_mobile/state/session.dart';
 import 'package:tiny_pos_mobile/state/menu_controller.dart';
 import 'package:tiny_pos_mobile/api/bill_repository.dart';
+import 'package:tiny_pos_mobile/state/bills_controller.dart';
 import 'package:tiny_pos_mobile/models/auth_user.dart';
 import 'package:tiny_pos_mobile/models/menu.dart';
 import 'package:tiny_pos_mobile/models/bill.dart';
@@ -88,7 +89,15 @@ Future<void> pumpSignedIn(
   final session = SessionState()..debugSignIn(fakeUser(staffRole));
   final menu = PosMenuController(session.api)..debugSetMenu(fakeMenu());
   final billRepo = FakeBillRepository(session.api);
-  await t.pumpWidget(TinyPosApp(session: session, menu: menu, billRepo: billRepo));
+  final bills = BillsController(billRepo)
+    ..debugSetBills([
+      Bill(
+        id: 'b1', billCode: 'B260611-0001', status: 'PAID', serviceType: 'TAKE_AWAY',
+        subtotal: 58000, discountTotal: 0, grandTotal: 58000, paidTotal: 58000,
+        note: null, paidAt: null, createdAt: null, items: const [],
+      ),
+    ]);
+  await t.pumpWidget(TinyPosApp(session: session, menu: menu, billRepo: billRepo, bills: bills));
   await t.pump();
   await t.pump(const Duration(milliseconds: 450));
 }

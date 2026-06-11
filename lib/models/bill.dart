@@ -52,6 +52,8 @@ class Bill {
   final int paidTotal;
   final String? note;
   final DateTime? paidAt;
+  final DateTime? createdAt;
+  final String? tableSessionId;
   final List<BillItem> items;
 
   Bill({
@@ -65,6 +67,8 @@ class Bill {
     required this.paidTotal,
     required this.note,
     required this.paidAt,
+    this.createdAt,
+    this.tableSessionId,
     required this.items,
   });
 
@@ -79,11 +83,14 @@ class Bill {
         paidTotal: BillItem._int(j['paidTotal']),
         note: j['note'] as String?,
         paidAt: j['paidAt'] != null ? DateTime.tryParse(j['paidAt'].toString()) : null,
+        createdAt: j['createdAt'] != null ? DateTime.tryParse(j['createdAt'].toString()) : null,
+        tableSessionId: j['tableSessionId'] as String?,
         items: ((j['items'] as List?) ?? const []).map((e) => BillItem.fromJson(e as Map)).toList(),
       );
 
   int get itemCount => items.fold(0, (a, i) => a + i.quantity);
   bool get isPaid => status == 'PAID';
+  bool get isDineIn => serviceType == 'DINE_IN';
 }
 
 /// One line to POST when creating/adding to a bill (matches BillItemInput).
