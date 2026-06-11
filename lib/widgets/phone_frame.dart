@@ -7,7 +7,6 @@ import '../theme/palette.dart';
 import '../theme/typography.dart';
 import '../theme/app_icons.dart';
 import 'shell.dart';
-import '../screens/login_screen.dart';
 import '../screens/cashier/cashier_shell.dart';
 import '../screens/kds/kds_shell.dart';
 import '../screens/admin/admin_shell.dart';
@@ -69,7 +68,8 @@ class _PhoneFrameState extends State<PhoneFrame> {
   Widget _body(AppState state) {
     switch (state.role) {
       case null:
-        return const LoginScreen();
+        // Role is applied from the auth session a frame after sign-in.
+        return const Center(child: CircularProgressIndicator(color: Color(0xFFD98A4E)));
       case Role.cashier:
         return const CashierShell();
       case Role.kds:

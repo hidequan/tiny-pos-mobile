@@ -109,6 +109,28 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Maps the authenticated staffRole (from the API) onto the role-based shell.
+  /// Called once after sign-in. Cashiers land on POS, baristas on KDS,
+  /// managers/admins on the admin area.
+  void applyAuthRole(String staffRole) {
+    final Role target;
+    switch (staffRole) {
+      case 'BARISTA':
+        target = Role.kds;
+        break;
+      case 'MANAGER':
+      case 'ADMIN':
+      case 'SUPER_ADMIN':
+        target = Role.admin;
+        break;
+      case 'CASHIER':
+      default:
+        target = Role.cashier;
+    }
+    if (role == target) return;
+    enterRole(target);
+  }
+
   // =================== CASHIER ===================
   void setCashTab(String t) {
     cashTab = t;

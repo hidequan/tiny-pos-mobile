@@ -4,6 +4,15 @@ Phát hành test qua **Firebase App Distribution** (group `testers`). Mỗi bả
 tăng `version` trong `pubspec.yaml` → push `main` → GitHub Actions tự build APK/AAB,
 chạy `flutter test`, và phát hành cho tester.
 
+## v0.2.0 — Tích hợp backend dùng chung (nền tảng)
+- **Đăng nhập thật** username/password vào API dùng chung với web
+  (https://pos.lptech.info.vn/api) — "app và web là 1". Định tuyến theo `staffRole`
+  (CASHIER→bán hàng, BARISTA→KDS, MANAGER/ADMIN→quản trị).
+- Lớp API: Dio client (bóc envelope {success,data}, tự gắn Bearer, tự refresh token
+  khi 401), lưu phiên qua restart, base URL cấu hình `--dart-define=API_BASE`.
+- Đã verify login LIVE end-to-end (cashier01). Lưu ý: web cross-origin bị CORS — app
+  native không ảnh hưởng. Các màn vẫn dùng dữ liệu mock; lớp thay dữ liệu thật ở bản kế.
+
 ## v0.1.3 — Thương hiệu + hồ sơ store
 - **App icon** cốc cà phê (gradient terracotta) thay icon Flutter mặc định; adaptive icon
   Android + icon iOS/web; **splash screen** nền espresso.

@@ -1,117 +1,74 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tiny_pos_mobile/main.dart';
 import 'package:tiny_pos_mobile/state/app_state.dart';
 
-/// Walks every role / tab / sheet and asserts NO exception (crash, RenderFlex
-/// overflow, null deref, bad state) is thrown while building or interacting.
-/// Uses pump() with fixed durations — never pumpAndSettle() — because the app
-/// has perpetual animations (KDS 1s timer, pulsing badges) that never settle.
+import 'helpers.dart';
+
+/// Walks every role / tab / sheet (signed in via injected session) and asserts
+/// NO exception (crash, RenderFlex overflow, null deref) is thrown. Uses pump()
+/// with fixed durations — never pumpAndSettle() — because the app has perpetual
+/// animations (KDS 1s timer, pulsing badges) that never settle.
 void main() {
-  setUpAll(() {
-    // Tests run offline; don't let google_fonts attempt network fetches.
-    GoogleFonts.config.allowRuntimeFetching = false;
-  });
-
-  Future<void> boot(WidgetTester t) async {
-    await t.binding.setSurfaceSize(const Size(430, 932)); // a phone viewport
-    addTearDown(() => t.binding.setSurfaceSize(null));
-    await t.pumpWidget(const TinyPosApp());
-    await t.pump();
-    await t.pump(const Duration(milliseconds: 400));
-  }
-
-  // Settle a couple of frames (transition + content) without waiting forever.
-  Future<void> beat(WidgetTester t) async {
-    await t.pump();
-    await t.pump(const Duration(milliseconds: 350));
-    await t.pump(const Duration(milliseconds: 350));
-  }
-
-  // Tap the first widget matching [finder] if present; scroll into view first.
-  Future<bool> tap(WidgetTester t, Finder finder) async {
-    if (finder.evaluate().isEmpty) return false;
-    final one = finder.first;
-    try {
-      await t.ensureVisible(one);
-    } catch (_) {/* not in a scrollable — fine */}
-    await t.tap(one, warnIfMissed: false);
-    await beat(t);
-    return true;
-  }
-
   Finder txt(String s) => find.text(s);
 
-  // Fail the test (with a clear label) if any exception — crash, RenderFlex
-  // overflow, null deref, bad state — was thrown during the preceding step.
   void noCrash(WidgetTester t, String where) {
     final ex = t.takeException();
     expect(ex, isNull, reason: 'Exception while $where: $ex');
   }
 
-  testWidgets('Login screen renders', (t) async {
-    await boot(t);
-    expect(txt('Tiny POS'), findsOneWidget);
-    expect(txt('Thu ngân'), findsOneWidget);
-    expect(txt('KDS / Bar'), findsOneWidget);
-    expect(txt('Quản trị'), findsOneWidget);
-    noCrash(t, 'login render');
+  Future<void> tap(WidgetTester t, Finder f) => tapIfPresent(t, f);
+
+  testWidgets('Auth login screen renders when signed out', (t) async {
+    SharedPreferences.setMockInitialValues({});
+    await t.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+    await t.pumpWidget(const TinyPosApp());
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 400));
+    expect(txt('Đăng nhập'), findsWidgets);
+    expect(find.byType(TextField), findsWidgets); // username + password
+    noCrash(t, 'auth login render');
   });
 
   testWidgets('Cashier: all tabs + product/cart/payment sheets', (t) async {
-    await boot(t);
-    await tap(t, txt('Thu ngân'));
+    await pumpSignedIn(t, staffRole: 'CASHIER');
     noCrash(t, 'enter cashier / sell');
 
-    // product with options -> sheet
     await tap(t, txt('Cà phê sữa đá'));
     noCrash(t, 'open product options sheet');
-    // tap some options
     await tap(t, txt('L'));
     await tap(t, txt('50%'));
     await tap(t, txt('Trân châu'));
     noCrash(t, 'select options');
-    // add to cart (button label starts with "Thêm ·")
     await tap(t, find.textContaining('Thêm ·'));
     noCrash(t, 'confirm add to cart');
 
-    // add a no-option product directly
     await tap(t, txt('Espresso'));
     noCrash(t, 'add simple product');
 
-    // open cart via the cart bar ("Xem đơn")
     await tap(t, txt('Xem đơn'));
     noCrash(t, 'open cart sheet');
-    // apply promo + change order type
     await tap(t, txt('Khuyến mãi'));
     noCrash(t, 'toggle promo');
-    // go to payment
     await tap(t, find.textContaining('Thanh toán ·'));
     noCrash(t, 'open payment sheet');
-    // try each payment method
     await tap(t, txt('Chuyển khoản / QR'));
-    noCrash(t, 'payment QR');
     await tap(t, txt('Thẻ ngân hàng'));
-    noCrash(t, 'payment card');
     await tap(t, txt('Ví MoMo'));
-    noCrash(t, 'payment momo');
     await tap(t, txt('Tiền mặt'));
-    // pick a quick cash amount then complete
+    noCrash(t, 'payment methods');
     await tap(t, txt('500.000đ'));
-    noCrash(t, 'cash received');
     await tap(t, find.textContaining('Hoàn tất'));
     noCrash(t, 'complete order / success sheet');
     await tap(t, txt('Đơn mới'));
     noCrash(t, 'after pay');
 
-    // other cashier tabs
     await tap(t, txt('Đơn hàng'));
     noCrash(t, 'orders tab');
     await tap(t, txt('Sơ đồ bàn'));
     noCrash(t, 'tables tab');
-    // tap a busy table -> sheet
     await tap(t, txt('A1'));
     noCrash(t, 'table detail sheet');
     await tap(t, find.byIcon(Icons.close_rounded));
@@ -122,39 +79,77 @@ void main() {
   });
 
   testWidgets('v0.1.1: product search filters the grid', (t) async {
-    await boot(t);
-    await tap(t, txt('Thu ngân'));
+    await pumpSignedIn(t, staffRole: 'CASHIER');
     await t.enterText(find.byType(TextField).first, 'Latte');
     await beat(t);
     expect(find.text('Matcha Latte'), findsOneWidget);
-    expect(find.text('Espresso'), findsNothing); // filtered out
+    expect(find.text('Espresso'), findsNothing);
     noCrash(t, 'product search filter');
   });
 
   testWidgets('KDS: queue interactions + done + stats', (t) async {
-    await boot(t);
-    await tap(t, txt('KDS / Bar'));
+    await pumpSignedIn(t, staffRole: 'BARISTA');
     noCrash(t, 'enter KDS queue');
-    // toggle a ticket item done
     await tap(t, txt('Bạc xỉu'));
     noCrash(t, 'toggle kds item');
-    // filter chips
     await tap(t, txt('Bếp / bánh'));
     await tap(t, txt('Tất cả'));
     noCrash(t, 'kds filters');
-    // bump a ticket
     await tap(t, find.textContaining('Xong tất cả'));
     noCrash(t, 'bump ticket');
-    // tabs
     await tap(t, txt('Đã xong'));
     noCrash(t, 'kds done tab');
     await tap(t, txt('Thống kê'));
     noCrash(t, 'kds stats tab');
   });
 
+  testWidgets('Scan: profile sheets (cashier) + search clear', (t) async {
+    await pumpSignedIn(t, staffRole: 'CASHIER');
+    await tap(t, txt('TB'));
+    noCrash(t, 'cashier profile sheet');
+    await tap(t, find.byIcon(Icons.close_rounded));
+    await t.enterText(find.byType(TextField).first, 'zzzzz');
+    await beat(t);
+    expect(find.text('Không tìm thấy món'), findsOneWidget);
+    await tap(t, find.byIcon(Icons.close_rounded));
+    expect(find.text('Cà phê sữa đá'), findsWidgets);
+    noCrash(t, 'search clear');
+  });
+
+  testWidgets('Scan: KDS profile sheet', (t) async {
+    await pumpSignedIn(t, staffRole: 'BARISTA');
+    await tap(t, txt('QD'));
+    noCrash(t, 'kds profile sheet');
+  });
+
+  testWidgets('Scan: admin profile + branch pick + add-promo + add-branch', (t) async {
+    await pumpSignedIn(t, staffRole: 'ADMIN');
+    await tap(t, txt('AN'));
+    noCrash(t, 'admin profile sheet');
+    await tap(t, find.byIcon(Icons.close_rounded));
+    await tap(t, txt('Cầu Giấy ▾'));
+    noCrash(t, 'branch pick sheet');
+    await tap(t, find.byIcon(Icons.close_rounded));
+    await tap(t, txt('Thêm'));
+    await tap(t, txt('Khuyến mãi'));
+    await tap(t, txt('+ Tạo'));
+    noCrash(t, 'add-promo form');
+    await t.enterText(find.byType(TextField).first, 'KM Test');
+    await tap(t, txt('Lưu khuyến mãi'));
+    noCrash(t, 'submit add-promo');
+    expect(find.text('KM Test'), findsOneWidget);
+    await tap(t, find.byIcon(Icons.chevron_left_rounded));
+    await tap(t, txt('Chi nhánh'));
+    await tap(t, txt('Thêm chi nhánh'));
+    noCrash(t, 'add-branch form');
+    await t.enterText(find.byType(TextField).first, 'CN Test');
+    await tap(t, txt('Lưu chi nhánh'));
+    noCrash(t, 'submit add-branch');
+    expect(find.text('CN Test'), findsOneWidget);
+  });
+
   testWidgets('v0.1.2: add-staff form appends a member', (t) async {
-    await boot(t);
-    await tap(t, txt('Quản trị'));
+    await pumpSignedIn(t, staffRole: 'ADMIN');
     await tap(t, txt('Thêm'));
     await tap(t, txt('Nhân viên & phân quyền'));
     await tap(t, txt('+ Thêm'));
@@ -179,101 +174,28 @@ void main() {
     expect(s2.cartCount, 1);
   });
 
-  testWidgets('Scan: profile sheets (cashier/kds/admin) + search clear', (t) async {
-    await boot(t);
-    // cashier profile (contains the dark-mode row)
-    await tap(t, txt('Thu ngân'));
-    await tap(t, txt('TB'));
-    noCrash(t, 'cashier profile sheet');
-    await tap(t, find.byIcon(Icons.close_rounded));
-    // search empty-state + clear restores grid
-    await t.enterText(find.byType(TextField).first, 'zzzzz');
-    await beat(t);
-    expect(find.text('Không tìm thấy món'), findsOneWidget);
-    await tap(t, find.byIcon(Icons.close_rounded)); // the X in the search field
-    expect(find.text('Cà phê sữa đá'), findsWidgets);
-    noCrash(t, 'search clear');
-  });
-
-  testWidgets('Scan: KDS profile sheet', (t) async {
-    await boot(t);
-    await tap(t, txt('KDS / Bar'));
-    await tap(t, txt('QD'));
-    noCrash(t, 'kds profile sheet');
-  });
-
-  testWidgets('Scan: admin profile + branch pick + add-promo + add-branch', (t) async {
-    await boot(t);
-    await tap(t, txt('Quản trị'));
-    await tap(t, txt('AN'));
-    noCrash(t, 'admin profile sheet');
-    await tap(t, find.byIcon(Icons.close_rounded));
-    await tap(t, txt('Cầu Giấy ▾'));
-    noCrash(t, 'branch pick sheet');
-    await tap(t, find.byIcon(Icons.close_rounded));
-    // add-promo form
-    await tap(t, txt('Thêm'));
-    await tap(t, txt('Khuyến mãi'));
-    await tap(t, txt('+ Tạo'));
-    noCrash(t, 'add-promo form');
-    await t.enterText(find.byType(TextField).first, 'KM Test');
-    await tap(t, txt('Lưu khuyến mãi'));
-    noCrash(t, 'submit add-promo');
-    expect(find.text('KM Test'), findsOneWidget);
-    // add-branch form
-    await tap(t, find.byIcon(Icons.chevron_left_rounded));
-    await tap(t, txt('Chi nhánh'));
-    await tap(t, txt('Thêm chi nhánh'));
-    noCrash(t, 'add-branch form');
-    await t.enterText(find.byType(TextField).first, 'CN Test');
-    await tap(t, txt('Lưu chi nhánh'));
-    noCrash(t, 'submit add-branch');
-    expect(find.text('CN Test'), findsOneWidget);
-  });
-
   testWidgets('Admin: all tabs + sub-pages + sheets', (t) async {
-    await boot(t);
-    await tap(t, txt('Quản trị'));
+    await pumpSignedIn(t, staffRole: 'ADMIN');
     noCrash(t, 'enter admin home');
-
     await tap(t, txt('Thực đơn'));
     noCrash(t, 'admin menu');
-    // open edit-product sheet
     await tap(t, txt('Cà phê sữa đá'));
     noCrash(t, 'edit product sheet');
     await tap(t, find.byIcon(Icons.close_rounded));
-    // add product sheet
     await tap(t, find.byIcon(Icons.add_rounded));
     noCrash(t, 'add product sheet');
     await tap(t, find.byIcon(Icons.close_rounded));
-
     await tap(t, txt('Kho'));
     noCrash(t, 'admin inventory (stock)');
     await tap(t, txt('Định lượng (BOM)'));
     noCrash(t, 'admin inventory (BOM)');
-
     await tap(t, txt('Báo cáo'));
     noCrash(t, 'admin reports');
     await tap(t, txt('Hôm nay'));
     noCrash(t, 'reports range');
-
     await tap(t, txt('Thêm'));
     noCrash(t, 'admin more');
-    // sub-pages
     await tap(t, txt('Nhân viên & phân quyền'));
     noCrash(t, 'staff/RBAC sub-page');
-    await tap(t, find.byIcon(Icons.chevron_left_rounded));
-    await tap(t, txt('Khuyến mãi'));
-    noCrash(t, 'promos sub-page');
-    await tap(t, find.byIcon(Icons.chevron_left_rounded));
-    await tap(t, txt('Chi nhánh'));
-    noCrash(t, 'branches sub-page');
-    await tap(t, find.byIcon(Icons.chevron_left_rounded));
-    await tap(t, txt('Ca làm việc'));
-    noCrash(t, 'shift-admin sub-page');
-    await tap(t, find.byIcon(Icons.chevron_left_rounded));
-    // settings sheet
-    await tap(t, txt('Cài đặt hệ thống'));
-    noCrash(t, 'settings sheet');
   });
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
+import '../../state/session.dart';
 import '../../data/models.dart';
 import '../../data/seed.dart';
 import '../../theme/palette.dart';
@@ -168,7 +169,7 @@ void openAdminProfile(BuildContext context) {
           footer: AppButton('Đăng xuất / đổi vai trò',
               icon: 'logout', large: true, block: true, variant: BtnVariant.soft, textColor: p0.red, onTap: () {
             context.shell.closeSheet();
-            state.logout();
+            context.read<SessionState>().logout();
           }),
         );
       }));

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
+import '../../state/session.dart';
 import '../../theme/palette.dart';
 import '../../theme/typography.dart';
 import '../../theme/app_icons.dart';
@@ -28,7 +29,7 @@ class AdminMoreScreen extends StatelessWidget {
     return Column(children: [
       TopBar(
         title: 'Quản lý',
-        subtitle: Text('Tiny POS · v0.1.3', style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
+        subtitle: Text('Tiny POS · v0.2.0', style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
         actions: [Avatar('AN', onTap: () => openAdminProfile(context))],
       ),
       Expanded(
@@ -65,7 +66,7 @@ class AdminMoreScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: AppButton('Đăng xuất / đổi vai trò',
                   icon: 'logout', block: true, variant: BtnVariant.soft, textColor: p.red,
-                  onTap: () => state.logout()),
+                  onTap: () => context.read<SessionState>().logout()),
             ),
           ],
         ),

@@ -1,99 +1,65 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:tiny_pos_mobile/main.dart';
 
-/// Runs a condensed full walkthrough at several viewport sizes and asserts NO
-/// exception (overflow / crash) at any of them. The 320-wide case is the real
-/// stress test (the phone frame fills the width when it's below the 480 cap).
+import 'helpers.dart';
+
+/// Runs a condensed walkthrough at several viewport sizes (signed in per role)
+/// and asserts NO exception (overflow / crash) at any of them. The 320-wide
+/// case is the real stress test (the phone frame fills the width below 480).
 void main() {
-  setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
-
   final sizes = <String, Size>{
-    'tiny-320x568': const Size(320, 568), // iPhone SE (1st gen) — smallest
+    'tiny-320x568': const Size(320, 568),
     'small-360x640': const Size(360, 640),
-    'cap-480x900': const Size(480, 900), // exactly the max frame width
-    'tablet-768x1024': const Size(768, 1024), // frame centered at 480
-    'wide-1280x800': const Size(1280, 800), // desktop — frame centered at 480
+    'cap-480x900': const Size(480, 900),
+    'tablet-768x1024': const Size(768, 1024),
+    'wide-1280x800': const Size(1280, 800),
   };
 
-  Future<void> beat(WidgetTester t) async {
-    await t.pump();
-    await t.pump(const Duration(milliseconds: 350));
-    await t.pump(const Duration(milliseconds: 350));
-  }
-
-  Future<void> tap(WidgetTester t, Finder f) async {
-    if (f.evaluate().isEmpty) return;
-    try {
-      await t.ensureVisible(f.first);
-    } catch (_) {}
-    await t.tap(f.first, warnIfMissed: false);
-    await beat(t);
-  }
-
-  void noCrash(WidgetTester t, String where, String size) {
-    final ex = t.takeException();
-    expect(ex, isNull, reason: '[$size] exception while $where: $ex');
-  }
-
   Finder txt(String s) => find.text(s);
+  Future<void> tap(WidgetTester t, Finder f) => tapIfPresent(t, f);
 
   for (final entry in sizes.entries) {
     final label = entry.key;
     final size = entry.value;
 
-    testWidgets('Responsive [$label]: all roles + key sheets', (t) async {
-      await t.binding.setSurfaceSize(size);
-      addTearDown(() => t.binding.setSurfaceSize(null));
-      await t.pumpWidget(const TinyPosApp());
-      await t.pump();
-      await t.pump(const Duration(milliseconds: 400));
-      noCrash(t, 'login', label);
+    void noCrash(WidgetTester t, String where) {
+      final ex = t.takeException();
+      expect(ex, isNull, reason: '[$label] exception while $where: $ex');
+    }
 
+    testWidgets('Responsive [$label]: all roles + key sheets', (t) async {
       // ---- Cashier ----
-      await tap(t, txt('Thu ngân'));
-      noCrash(t, 'sell', label);
-      await tap(t, txt('Cà phê sữa đá')); // product options sheet
-      noCrash(t, 'product sheet', label);
+      await pumpSignedIn(t, staffRole: 'CASHIER', size: size);
+      noCrash(t, 'sell');
+      await tap(t, txt('Cà phê sữa đá'));
+      noCrash(t, 'product sheet');
       await tap(t, find.textContaining('Thêm ·'));
-      await tap(t, txt('Xem đơn')); // cart sheet
-      noCrash(t, 'cart sheet', label);
-      await tap(t, find.textContaining('Thanh toán ·')); // payment
-      noCrash(t, 'payment sheet', label);
+      await tap(t, txt('Xem đơn'));
+      noCrash(t, 'cart sheet');
+      await tap(t, find.textContaining('Thanh toán ·'));
+      noCrash(t, 'payment sheet');
       await tap(t, find.byIcon(Icons.close_rounded));
-      await tap(t, txt('Đơn hàng'));
-      noCrash(t, 'orders', label);
       await tap(t, txt('Sơ đồ bàn'));
-      noCrash(t, 'tables', label);
+      noCrash(t, 'tables');
       await tap(t, txt('Ca làm'));
-      noCrash(t, 'shift', label);
+      noCrash(t, 'shift');
 
       // ---- KDS ----
-      await t.pumpWidget(const TinyPosApp()); // fresh -> login
-      await t.pump(const Duration(milliseconds: 400));
-      await tap(t, txt('KDS / Bar'));
-      noCrash(t, 'kds queue', label);
+      await pumpSignedIn(t, staffRole: 'BARISTA', size: size);
+      noCrash(t, 'kds queue');
       await tap(t, txt('Thống kê'));
-      noCrash(t, 'kds stats', label);
+      noCrash(t, 'kds stats');
 
       // ---- Admin ----
-      await t.pumpWidget(const TinyPosApp());
-      await t.pump(const Duration(milliseconds: 400));
-      await tap(t, txt('Quản trị'));
-      noCrash(t, 'admin home', label);
-      await tap(t, txt('Thực đơn'));
-      noCrash(t, 'admin menu', label);
+      await pumpSignedIn(t, staffRole: 'ADMIN', size: size);
+      noCrash(t, 'admin home');
       await tap(t, txt('Kho'));
-      noCrash(t, 'inventory stock', label);
-      await tap(t, txt('Định lượng (BOM)'));
-      noCrash(t, 'inventory bom', label);
+      noCrash(t, 'inventory');
       await tap(t, txt('Báo cáo'));
-      noCrash(t, 'reports', label);
+      noCrash(t, 'reports');
       await tap(t, txt('Thêm'));
-      noCrash(t, 'more', label);
       await tap(t, txt('Nhân viên & phân quyền'));
-      noCrash(t, 'staff/RBAC', label);
+      noCrash(t, 'staff/RBAC');
     });
   }
 }

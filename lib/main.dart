@@ -3,8 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'state/app_state.dart';
+import 'state/session.dart';
 import 'theme/typography.dart';
 import 'widgets/phone_frame.dart';
+import 'widgets/app_scaffold.dart';
+import 'screens/auth/login_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,18 +15,19 @@ Future<void> main() async {
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
   ));
-  final state = AppState();
-  await state.load(); // restore theme / cart / orders / shift
-  runApp(TinyPosApp(state: state));
+  final app = AppState();
+  await app.load(); // theme / cached UI prefs
+  runApp(TinyPosApp(app: app));
 }
 
 class TinyPosApp extends StatelessWidget {
-  final AppState? state;
-  const TinyPosApp({super.key, this.state});
+  final AppState? app;
+  final SessionState? session; // injected (already signed-in) by widget tests
+  const TinyPosApp({super.key, this.app, this.session});
 
   @override
   Widget build(BuildContext context) {
-    final app = MaterialApp(
+    final material = MaterialApp(
       title: 'Tiny POS',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -34,12 +38,68 @@ class TinyPosApp extends StatelessWidget {
         splashFactory: NoSplash.splashFactory,
         highlightColor: Colors.transparent,
       ),
-      home: const PhoneFrame(),
+      home: const RootGate(),
     );
-    // Tests construct TinyPosApp() with no state -> use create() so they never
-    // touch SharedPreferences. Runtime passes a pre-loaded state -> use .value.
-    return state != null
-        ? ChangeNotifierProvider<AppState>.value(value: state!, child: app)
-        : ChangeNotifierProvider<AppState>(create: (_) => AppState(), child: app);
+    return MultiProvider(
+      providers: [
+        if (session != null)
+          ChangeNotifierProvider<SessionState>.value(value: session!)
+        else
+          ChangeNotifierProvider<SessionState>(create: (_) => SessionState()..restore()),
+        if (app != null)
+          ChangeNotifierProvider<AppState>.value(value: app!)
+        else
+          ChangeNotifierProvider<AppState>(create: (_) => AppState()),
+      ],
+      child: material,
+    );
+  }
+}
+
+/// Decides what to show based on the auth session: splash → login → app shell.
+class RootGate extends StatelessWidget {
+  const RootGate({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final session = context.watch<SessionState>();
+    switch (session.status) {
+      case SessionStatus.loading:
+        return const _Splash();
+      case SessionStatus.signedOut:
+        return const AppFrame(child: AuthLoginScreen());
+      case SessionStatus.signedIn:
+        // Map the authenticated staffRole onto the existing role-based shell.
+        final app = context.read<AppState>();
+        WidgetsBinding.instance.addPostFrameCallback((_) => app.applyAuthRole(session.user!.staffRole));
+        return const PhoneFrame();
+    }
+  }
+}
+
+class _Splash extends StatelessWidget {
+  const _Splash();
+  @override
+  Widget build(BuildContext context) {
+    return const AppFrame(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment(0, -1),
+            end: Alignment(0.4, 1),
+            colors: [Color(0xFF2A160C), Color(0xFF160B05)],
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('☕', style: TextStyle(fontSize: 52)),
+              SizedBox(height: 18),
+              SizedBox(width: 26, height: 26, child: CircularProgressIndicator(strokeWidth: 2.4, color: Color(0xFFD98A4E))),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

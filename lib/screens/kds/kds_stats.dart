@@ -95,16 +95,25 @@ class KdsStatsScreen extends StatelessWidget {
           child: Icon(_ic(s[0] as String), size: 18, color: s[2] as Color),
         ),
         const SizedBox(height: 9),
-        Text(s[3] as String, style: AppType.display(size: 22, height: 1, color: p.ink)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(s[3] as String, maxLines: 1, style: AppType.display(size: 22, height: 1, color: p.ink)),
+        ),
         const SizedBox(height: 4),
-        Text(s[4] as String, style: AppType.body(size: 12, weight: FontWeight.w700, color: p.ink2)),
+        Text(s[4] as String, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: AppType.body(size: 12, weight: FontWeight.w700, color: p.ink2)),
         if (delta.isNotEmpty) ...[
           const SizedBox(height: 6),
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.trending_up_rounded, size: 12, color: up ? p.greenD : p.red),
-            const SizedBox(width: 3),
-            Text(delta, style: AppType.body(size: 11, weight: FontWeight.w800, color: up ? p.greenD : p.red)),
-          ]),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.trending_up_rounded, size: 12, color: up ? p.greenD : p.red),
+              const SizedBox(width: 3),
+              Text(delta, style: AppType.body(size: 11, weight: FontWeight.w800, color: up ? p.greenD : p.red)),
+            ]),
+          ),
         ],
       ]),
     );

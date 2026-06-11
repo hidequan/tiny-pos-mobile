@@ -41,16 +41,25 @@ class StatCard extends StatelessWidget {
           child: Icon(AppIcons.get(icon), size: 18, color: fg),
         ),
         const SizedBox(height: 9),
-        Text(value, style: AppType.display(size: 22, height: 1, color: p.ink)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(value, maxLines: 1, style: AppType.display(size: 22, height: 1, color: p.ink)),
+        ),
         const SizedBox(height: 4),
-        Text(label, style: AppType.body(size: 12, weight: FontWeight.w700, color: p.ink2)),
+        Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: AppType.body(size: 12, weight: FontWeight.w700, color: p.ink2)),
         if (delta != null) ...[
           const SizedBox(height: 6),
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.trending_up_rounded, size: 12, color: up ? p.greenD : p.red),
-            const SizedBox(width: 3),
-            Text(delta!, style: AppType.body(size: 11, weight: FontWeight.w800, color: up ? p.greenD : p.red)),
-          ]),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.trending_up_rounded, size: 12, color: up ? p.greenD : p.red),
+              const SizedBox(width: 3),
+              Text(delta!, maxLines: 1, style: AppType.body(size: 11, weight: FontWeight.w800, color: up ? p.greenD : p.red)),
+            ]),
+          ),
         ],
       ]),
     );
