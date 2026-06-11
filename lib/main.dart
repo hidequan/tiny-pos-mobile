@@ -8,9 +8,11 @@ import 'state/menu_controller.dart';
 import 'state/bills_controller.dart';
 import 'state/kds_controller.dart';
 import 'state/tables_controller.dart';
+import 'state/reports_controller.dart';
 import 'api/bill_repository.dart';
 import 'api/kds_repository.dart';
 import 'api/table_repository.dart';
+import 'api/reports_repository.dart';
 import 'theme/typography.dart';
 import 'widgets/phone_frame.dart';
 import 'widgets/app_scaffold.dart';
@@ -35,7 +37,8 @@ class TinyPosApp extends StatelessWidget {
   final BillsController? bills; // injected (preloaded) by widget tests
   final KdsController? kds; // injected (preloaded) by widget tests
   final TablesController? tables; // injected (preloaded) by widget tests
-  const TinyPosApp({super.key, this.app, this.session, this.menu, this.billRepo, this.bills, this.kds, this.tables});
+  final ReportsController? reports; // injected (preloaded) by widget tests
+  const TinyPosApp({super.key, this.app, this.session, this.menu, this.billRepo, this.bills, this.kds, this.tables, this.reports});
 
   @override
   Widget build(BuildContext context) {
@@ -89,6 +92,12 @@ class TinyPosApp extends StatelessWidget {
         else
           ChangeNotifierProvider<TablesController>(
             create: (ctx) => TablesController(TableRepository(ctx.read<SessionState>().api)),
+          ),
+        if (reports != null)
+          ChangeNotifierProvider<ReportsController>.value(value: reports!)
+        else
+          ChangeNotifierProvider<ReportsController>(
+            create: (ctx) => ReportsController(ReportsRepository(ctx.read<SessionState>().api)),
           ),
       ],
       child: material,

@@ -7,14 +7,17 @@ import 'package:tiny_pos_mobile/state/menu_controller.dart';
 import 'package:tiny_pos_mobile/api/bill_repository.dart';
 import 'package:tiny_pos_mobile/api/kds_repository.dart';
 import 'package:tiny_pos_mobile/api/table_repository.dart';
+import 'package:tiny_pos_mobile/api/reports_repository.dart';
 import 'package:tiny_pos_mobile/state/bills_controller.dart';
 import 'package:tiny_pos_mobile/state/kds_controller.dart';
 import 'package:tiny_pos_mobile/state/tables_controller.dart';
+import 'package:tiny_pos_mobile/state/reports_controller.dart';
 import 'package:tiny_pos_mobile/models/auth_user.dart';
 import 'package:tiny_pos_mobile/models/menu.dart';
 import 'package:tiny_pos_mobile/models/bill.dart';
 import 'package:tiny_pos_mobile/models/kds.dart';
 import 'package:tiny_pos_mobile/models/table.dart';
+import 'package:tiny_pos_mobile/models/report.dart';
 
 /// A no-op KdsRepository returning canned tickets for widget tests.
 class FakeKdsRepository extends KdsRepository {
@@ -39,6 +42,26 @@ List<KdsTicket> _fakeTickets() => [
         ],
       ),
     ];
+
+/// A no-op ReportsRepository with canned figures for widget tests.
+class FakeReportsRepository extends ReportsRepository {
+  FakeReportsRepository(super.api);
+  @override
+  Future<SalesSummary> salesSummary({DateTime? from, DateTime? to}) async => SalesSummary(
+        revenue: 4250000, billCount: 142, avgBill: 29929, itemsSold: 312,
+        discountTotal: 180000, refundedTotal: 0, takeAway: 110, dineIn: 32,
+      );
+  @override
+  Future<List<BestSeller>> bestSelling({DateTime? from, DateTime? to, int limit = 10}) async => [
+        BestSeller(productName: 'Cà phê sữa đá', quantity: 88, revenue: 2552000),
+        BestSeller(productName: 'Bạc xỉu', quantity: 54, revenue: 1728000),
+      ];
+  @override
+  Future<List<PayMethodStat>> paymentMethods({DateTime? from, DateTime? to}) async => [
+        PayMethodStat(method: 'CASH', amount: 2800000, count: 96),
+        PayMethodStat(method: 'QR', amount: 1450000, count: 46),
+      ];
+}
 
 /// A no-op TableRepository with a canned floor map for widget tests.
 class FakeTableRepository extends TableRepository {
@@ -169,7 +192,17 @@ Future<void> pumpSignedIn(
     ]);
   final kds = KdsController(FakeKdsRepository(session.api))..debugSetData(_fakeTickets(), KdsStats(1, 1, 3));
   final tables = TablesController(FakeTableRepository(session.api))..debugSetAreas(_fakeAreas());
-  await t.pumpWidget(TinyPosApp(session: session, menu: menu, billRepo: billRepo, bills: bills, kds: kds, tables: tables));
+  final reports = ReportsController(FakeReportsRepository(session.api))
+    ..debugSet(
+      summary: SalesSummary(
+        revenue: 4250000, billCount: 142, avgBill: 29929, itemsSold: 312,
+        discountTotal: 180000, refundedTotal: 0, takeAway: 110, dineIn: 32,
+      ),
+      bestSellers: [BestSeller(productName: 'Cà phê sữa đá', quantity: 88, revenue: 2552000)],
+      payments: [PayMethodStat(method: 'CASH', amount: 2800000, count: 96)],
+    );
+  await t.pumpWidget(TinyPosApp(
+      session: session, menu: menu, billRepo: billRepo, bills: bills, kds: kds, tables: tables, reports: reports));
   await t.pump();
   await t.pump(const Duration(milliseconds: 450));
 }

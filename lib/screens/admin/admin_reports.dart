@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
+import '../../state/reports_controller.dart';
+import '../../models/report.dart';
 import '../../data/seed.dart';
 import '../../theme/palette.dart';
 import '../../theme/typography.dart';
@@ -10,114 +12,166 @@ import '../../widgets/shell.dart';
 import 'admin_widgets.dart';
 import 'admin_sheets.dart';
 
-class AdminReportsScreen extends StatelessWidget {
+const _payColors = <String, int>{
+  'CASH': 0xFF3F8F5B,
+  'QR': 0xFF3B7CC4,
+  'CARD': 0xFFD98A4E,
+  'WALLET': 0xFF7A4FB0,
+  'MOMO': 0xFFB83280,
+};
+
+class AdminReportsScreen extends StatefulWidget {
   const AdminReportsScreen({super.key});
+  @override
+  State<AdminReportsScreen> createState() => _AdminReportsScreenState();
+}
+
+class _AdminReportsScreenState extends State<AdminReportsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    final r = context.read<ReportsController>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!r.loaded) r.load();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final r = context.watch<ReportsController>();
     final p = context.palette;
-    const ranges = ['Hôm nay', '7 ngày', 'Tháng này'];
-    final total = Seed.report7.fold(0.0, (a, v) => a + v);
-    const days = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-    final worst = Seed.topSell.last;
+    final s = r.summary;
 
     return Column(children: [
       TopBar(
         title: 'Báo cáo',
-        subtitle: Text('${state.adminBranch} · ${state.repRange}',
+        subtitle: Text('${state.adminBranch} · ${r.range.label}',
             style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
         actions: [
-          IconBtn('report', onTap: () => context.shell.toast('Đang xuất Excel...', 'report')),
+          IconBtn('report', onTap: () => context.shell.toast('Xuất Excel — sắp có', 'report')),
           Avatar('AN', onTap: () => openAdminProfile(context)),
         ],
       ),
       ChipsRow(children: [
-        for (final r in ranges) PillChip(r, on: state.repRange == r, onTap: () => state.setRepRange(r)),
+        for (final rg in ReportRange.values)
+          PillChip(rg.label, on: r.range == rg, onTap: () => r.setRange(rg)),
       ]),
       Expanded(
-        child: ListView(
-          padding: const EdgeInsets.only(bottom: 20),
-          children: [
-            HeroCard(
-              gradient: const [Color(0xFF3A1F12), Color(0xFF241008)],
-              label: 'Tổng doanh thu · ${state.repRange}',
-              value: '${total.toStringAsFixed(1)}tr',
-              footer: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.trending_up_rounded, size: 13, color: Colors.white),
-                const SizedBox(width: 6),
-                Text('+14% so với kỳ trước · 980 đơn', style: AppType.body(size: 12.5, weight: FontWeight.w700, color: Colors.white)),
-              ]),
-            ),
-            CardBox(
-              margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-              padding: const EdgeInsets.fromLTRB(14, 6, 14, 14),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: RefreshIndicator(
+          color: p.terracotta,
+          onRefresh: () => r.load(),
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: 20),
+            children: [
+              HeroCard(
+                gradient: const [Color(0xFF3A1F12), Color(0xFF241008)],
+                label: 'Tổng doanh thu · ${r.range.label}',
+                value: vnd(s.revenue),
+                footer: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.receipt_long_rounded, size: 13, color: Colors.white),
+                  const SizedBox(width: 6),
+                  Text('${s.billCount} đơn · TB ${kShort(s.avgBill)}',
+                      style: AppType.body(size: 12.5, weight: FontWeight.w700, color: Colors.white)),
+                ]),
+              ),
+              if (r.error != null && !r.loaded)
+                _errorBox(context, r)
+              else if (r.loading && !r.loaded)
+                Padding(padding: const EdgeInsets.all(40), child: Center(child: CircularProgressIndicator(color: p.terracotta)))
+              else if (s.billCount == 0)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(2, 14, 2, 4),
-                  child: Text('Doanh thu theo ngày', style: AppType.display(size: 17, color: p.ink)),
-                ),
-                const BarChart(values: Seed.report7, labels: days),
-              ]),
-            ),
-            const SectionHeader('Cơ cấu thanh toán'),
-            CardBox(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.all(16),
-              child: Row(children: [
-                const Donut(segments: Seed.payMix, center: '100%', centerSub: '980 đơn'),
-                const SizedBox(width: 18),
-                Expanded(
-                  child: Column(children: [
-                    for (final m in Seed.payMix)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4.5),
-                        child: Row(children: [
-                          Container(width: 11, height: 11, decoration: BoxDecoration(color: Color(m[2] as int), borderRadius: BorderRadius.circular(4))),
-                          const SizedBox(width: 9),
-                          Expanded(child: Text(m[0] as String, style: AppType.body(size: 13, weight: FontWeight.w700, color: p.ink))),
-                          Text('${m[1]}%', style: AppType.body(size: 13, weight: FontWeight.w800, color: p.ink2)),
-                        ]),
-                      ),
-                  ]),
-                ),
-              ]),
-            ),
-            const SectionHeader('Bán chạy nhất'),
-            CardBox(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              clip: true,
-              padding: EdgeInsets.zero,
-              child: RowList([
-                for (var i = 0; i < 3; i++)
-                  _row(context, i, Seed.topSell[i][0] as String, Seed.topSell[i][1] as int, Seed.topSell[i][2] as int),
-              ]),
-            ),
-            const SectionHeader('Cần chú ý'),
-            CardBox(
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(children: [
-                const Text('🐌', style: TextStyle(fontSize: 22)),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Text('"${worst[0]}" bán chậm nhất tuần — chỉ ${worst[1]} ly. Cân nhắc khuyến mãi.',
-                      style: AppType.body(size: 13.5, weight: FontWeight.w700, color: p.ink)),
-                ),
-              ]),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-              child: AppButton('Xuất báo cáo Excel', icon: 'report', block: true, variant: BtnVariant.dark,
-                  onTap: () => context.shell.toast('Đã xuất báo cáo Excel', 'report')),
-            ),
-          ],
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: CardBox(
+                    padding: const EdgeInsets.all(20),
+                    child: Center(
+                      child: Text('Chưa có doanh thu trong kỳ "${r.range.label}".',
+                          style: AppType.body(size: 13.5, weight: FontWeight.w600, color: p.muted)),
+                    ),
+                  ),
+                )
+              else ...[
+                const SectionHeader('Cơ cấu thanh toán'),
+                _payments(context, r),
+                const SectionHeader('Bán chạy nhất'),
+                if (r.bestSellers.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Text('Chưa có dữ liệu món.', style: AppType.body(size: 13.5, weight: FontWeight.w600, color: p.muted)),
+                  )
+                else
+                  CardBox(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    clip: true,
+                    padding: EdgeInsets.zero,
+                    child: RowList([
+                      for (var i = 0; i < r.bestSellers.length && i < 5; i++)
+                        _row(context, i, r.bestSellers[i]),
+                    ]),
+                  ),
+              ],
+            ],
+          ),
         ),
       ),
     ]);
   }
 
-  Widget _row(BuildContext context, int i, String name, int qty, int price) {
+  Widget _payments(BuildContext context, ReportsController r) {
+    final p = context.palette;
+    if (r.payments.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: Text('Chưa ghi nhận thanh toán.', style: AppType.body(size: 13.5, weight: FontWeight.w600, color: p.muted)),
+      );
+    }
+    final segments = [
+      for (final m in r.payments) [m.label, r.sharePct(m), _payColors[m.method] ?? 0xFF8C7A6B],
+    ];
+    final totalCount = r.payments.fold(0, (a, m) => a + m.count);
+    return CardBox(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(16),
+      child: Row(children: [
+        Donut(segments: segments, center: '100%', centerSub: '$totalCount đơn'),
+        const SizedBox(width: 18),
+        Expanded(
+          child: Column(
+            children: [
+              for (final m in r.payments)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4.5),
+                  child: Row(children: [
+                    Container(width: 11, height: 11,
+                        decoration: BoxDecoration(color: Color(_payColors[m.method] ?? 0xFF8C7A6B), borderRadius: BorderRadius.circular(4))),
+                    const SizedBox(width: 9),
+                    Expanded(child: Text(m.label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: AppType.body(size: 13, weight: FontWeight.w700, color: p.ink))),
+                    Text('${r.sharePct(m)}%', style: AppType.body(size: 13, weight: FontWeight.w800, color: p.ink2)),
+                  ]),
+                ),
+            ],
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _errorBox(BuildContext context, ReportsController r) {
+    final p = context.palette;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+      child: Column(children: [
+        const Text('📉', style: TextStyle(fontSize: 40)),
+        const SizedBox(height: 10),
+        Text(r.error!, textAlign: TextAlign.center, style: AppType.body(size: 13, color: p.muted)),
+        const SizedBox(height: 14),
+        AppButton('Thử lại', icon: 'history', onTap: () => r.load()),
+      ]),
+    );
+  }
+
+  Widget _row(BuildContext context, int i, BestSeller b) {
     final p = context.palette;
     return Container(
       color: p.paper,
@@ -127,12 +181,14 @@ class AdminReportsScreen extends StatelessWidget {
         const SizedBox(width: 13),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            Text(name, style: AppType.body(size: 14.5, weight: FontWeight.w700, color: p.ink)),
+            Text(b.productName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: AppType.body(size: 14.5, weight: FontWeight.w700, color: p.ink)),
             const SizedBox(height: 2),
-            Text('$qty ly · ${vnd(price)}', style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
+            Text('${b.quantity} ly · ${vnd(b.revenue)}', style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
           ]),
         ),
-        Text(kShort(qty * price), style: AppType.body(size: 14, weight: FontWeight.w800, color: p.terracotta)),
+        const SizedBox(width: 8),
+        Text(kShort(b.revenue), style: AppType.body(size: 14, weight: FontWeight.w800, color: p.terracotta)),
       ]),
     );
   }
