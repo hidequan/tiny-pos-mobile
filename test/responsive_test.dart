@@ -31,9 +31,8 @@ void main() {
       // ---- Cashier ----
       await pumpSignedIn(t, staffRole: 'CASHIER', size: size);
       noCrash(t, 'sell');
-      await tap(t, txt('Cà phê sữa đá'));
-      noCrash(t, 'product sheet');
-      await tap(t, find.textContaining('Thêm ·'));
+      await tap(t, txt('Cà phê sữa đá')); // direct add (real menu, no modifiers)
+      noCrash(t, 'add product');
       await tap(t, txt('Xem đơn'));
       noCrash(t, 'cart sheet');
       await tap(t, find.textContaining('Thanh toán ·'));

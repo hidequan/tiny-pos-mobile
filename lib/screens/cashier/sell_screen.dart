@@ -2,29 +2,35 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
-import '../../data/models.dart';
-import '../../data/seed.dart';
+import '../../state/session.dart';
+import '../../state/menu_controller.dart';
+import '../../models/menu.dart';
+import '../../data/seed.dart' show vnd;
 import '../../theme/palette.dart';
 import '../../theme/typography.dart';
 import '../../widgets/common.dart';
 import '../../widgets/shell.dart';
 import 'cashier_sheets.dart';
+import 'menu_product_sheet.dart';
 
+/// POS sell screen — now backed by the REAL shared menu (GET /pos/menu).
 class SellScreen extends StatelessWidget {
   const SellScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final menuCtl = context.watch<PosMenuController>();
     final p = context.palette;
-    var list = state.productsForCat(state.cat);
-    final q = state.sellSearch.trim().toLowerCase();
-    if (q.isNotEmpty) {
-      list = list.where((pr) => pr.name.toLowerCase().contains(q)).toList();
+
+    // Kick off the load once (first time the cashier opens the screen).
+    if (!menuCtl.isLoaded && !menuCtl.loading && menuCtl.error == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => menuCtl.load());
     }
+
     final sub = state.otype == 'dinein'
-        ? 'Tại bàn${state.table != null ? ' · ${state.table}' : ''} · Ca chiều'
-        : 'Mang đi · Ca chiều';
+        ? 'Tại bàn${state.table != null ? ' · ${state.table}' : ''}'
+        : 'Mang đi';
 
     return Column(
       children: [
@@ -33,23 +39,47 @@ class SellScreen extends StatelessWidget {
           subtitle: Text(sub, style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
           actions: [
             IconBtn('scan', onTap: () => context.shell.toast('Quét mã vạch sản phẩm', 'scan')),
-            Avatar('TB', onTap: () => openProfile(context)),
+            Avatar(_initials(context), onTap: () => openProfile(context)),
           ],
         ),
-        SearchField(
-          hint: 'Tìm món...',
-          value: state.sellSearch,
-          onChanged: state.setSellSearch,
-        ),
+        Expanded(child: _body(context, state, menuCtl)),
+      ],
+    );
+  }
+
+  String _initials(BuildContext context) =>
+      context.read<SessionState>().user?.initials ?? 'TB';
+
+  Widget _body(BuildContext context, AppState state, PosMenuController menuCtl) {
+    final p = context.palette;
+    if (menuCtl.loading && !menuCtl.isLoaded) {
+      return Center(child: CircularProgressIndicator(color: p.terracotta));
+    }
+    if (menuCtl.error != null && !menuCtl.isLoaded) {
+      return _ErrorRetry(message: menuCtl.error!, onRetry: () => menuCtl.load(force: true));
+    }
+    final menu = menuCtl.menu;
+    if (menu == null) return const SizedBox.shrink();
+
+    var products = menu.byCategory(state.cat == 'all' ? null : state.cat);
+    final q = state.sellSearch.trim().toLowerCase();
+    if (q.isNotEmpty) {
+      products = products.where((x) => x.name.toLowerCase().contains(q)).toList();
+    }
+
+    return Column(
+      children: [
+        SearchField(hint: 'Tìm món...', value: state.sellSearch, onChanged: state.setSellSearch),
         ChipsRow(children: [
-          for (final c in Seed.cats)
-            PillChip(c.name, emoji: c.emoji, on: state.cat == c.id, onTap: () => state.setCat(c.id)),
+          PillChip('Tất cả', emoji: '✨', on: state.cat == 'all', onTap: () => state.setCat('all')),
+          for (final c in menu.categories)
+            PillChip(c.name, on: state.cat == c.id, onTap: () => state.setCat(c.id)),
         ]),
         Expanded(
           child: Stack(
             children: [
-              if (list.isEmpty)
-                EmptyState(emoji: '🔍', title: 'Không tìm thấy món', sub: 'Thử từ khóa hoặc nhóm khác')
+              if (products.isEmpty)
+                EmptyState(emoji: '🔍', title: 'Không có món', sub: 'Thử nhóm hoặc từ khóa khác')
               else
                 GridView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
@@ -57,13 +87,12 @@ class SellScreen extends StatelessWidget {
                     crossAxisCount: 2,
                     crossAxisSpacing: 10,
                     mainAxisSpacing: 10,
-                    mainAxisExtent: 128,
+                    mainAxisExtent: 150,
                   ),
-                  itemCount: list.length,
-                  itemBuilder: (_, i) => _ProductCard(product: list[i]),
+                  itemCount: products.length,
+                  itemBuilder: (_, i) => _ProductCard(product: products[i]),
                 ),
-              if (state.cartCount > 0)
-                Positioned(left: 12, right: 12, bottom: 12, child: _CartBar(state: state)),
+              if (state.cartCount > 0) Positioned(left: 12, right: 12, bottom: 12, child: _CartBar(state: state)),
             ],
           ),
         ),
@@ -73,19 +102,21 @@ class SellScreen extends StatelessWidget {
 }
 
 class _ProductCard extends StatelessWidget {
-  final Product product;
+  final MenuProduct product;
   const _ProductCard({required this.product});
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final qty = context.watch<AppState>().qtyForProduct(product.id);
+    final qty = context.select<AppState, int>((s) => s.qtyForProduct(product.id));
+    final soldOut = !product.available;
+    final bytes = product.imageBytes;
 
     return Pressable(
       scale: 0.97,
-      onTap: product.sold ? null : () => tapProduct(context, product),
+      onTap: soldOut ? null : () => onTapMenuProduct(context, product),
       child: Opacity(
-        opacity: product.sold ? 0.5 : 1,
+        opacity: soldOut ? 0.5 : 1,
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -99,22 +130,28 @@ class _ProductCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 54,
-                    height: 54,
-                    decoration: BoxDecoration(color: p.cream2, borderRadius: BorderRadius.circular(14)),
-                    alignment: Alignment.center,
-                    child: Text(product.emoji, style: const TextStyle(fontSize: 29)),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: bytes != null
+                        ? Image.memory(bytes, width: 72, height: 72, fit: BoxFit.cover, gaplessPlayback: true)
+                        : Container(
+                            width: 72,
+                            height: 72,
+                            color: p.cream2,
+                            child: Icon(Icons.local_cafe_outlined, size: 30, color: p.muted),
+                          ),
                   ),
                   const SizedBox(height: 8),
                   Expanded(
                     child: Text(product.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: AppType.body(size: 13.5, weight: FontWeight.w700, color: p.ink, height: 1.2)),
                   ),
-                  const SizedBox(height: 7),
-                  product.sold
+                  const SizedBox(height: 6),
+                  soldOut
                       ? Text('Hết hàng', style: AppType.body(size: 12, weight: FontWeight.w600, color: p.muted))
-                      : Text(vnd(product.price),
+                      : Text(vnd(product.displayPrice),
                           style: AppType.body(size: 14, weight: FontWeight.w800, color: p.terracotta)),
                 ],
               ),
@@ -135,7 +172,7 @@ class _ProductCard extends StatelessWidget {
                     child: Text('$qty', style: AppType.body(size: 13, weight: FontWeight.w800, color: Colors.white)),
                   ),
                 )
-              else if (product.opt)
+              else if (product.hasModifiers)
                 Positioned(
                   top: 0,
                   right: 0,
@@ -148,6 +185,30 @@ class _ProductCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ErrorRetry extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _ErrorRetry({required this.message, required this.onRetry});
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(30),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('📡', style: TextStyle(fontSize: 44)),
+          const SizedBox(height: 12),
+          Text('Không tải được thực đơn', style: AppType.display(size: 16, color: p.ink)),
+          const SizedBox(height: 6),
+          Text(message, textAlign: TextAlign.center, style: AppType.body(size: 13, color: p.muted)),
+          const SizedBox(height: 18),
+          AppButton('Thử lại', icon: 'history', onTap: onRetry),
+        ]),
       ),
     );
   }

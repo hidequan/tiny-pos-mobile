@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:tiny_pos_mobile/main.dart';
 import 'package:tiny_pos_mobile/state/session.dart';
+import 'package:tiny_pos_mobile/state/menu_controller.dart';
 import 'package:tiny_pos_mobile/models/auth_user.dart';
+import 'package:tiny_pos_mobile/models/menu.dart';
 
 /// A fake authenticated user so widget tests bypass the real network login.
 AuthUser fakeUser(String staffRole) => AuthUser(
@@ -19,8 +21,37 @@ AuthUser fakeUser(String staffRole) => AuthUser(
       ],
     );
 
+MenuProduct _p(String id, String cat, String name, int price) => MenuProduct(
+      id: id,
+      categoryId: cat,
+      name: name,
+      description: null,
+      basePrice: price,
+      available: true,
+      hasModifiers: false,
+      isFeatured: false,
+      tag: null,
+      imageRaw: null,
+      variants: [ProductVariant('$id-v', null, null, null, price, true)],
+      toppingIds: const [],
+    );
+
+/// A small offline menu so cashier widget tests don't hit the network.
+Menu fakeMenu() => Menu(
+      [MenuCategory('cf', 'Cà phê', 0), MenuCategory('tea', 'Trà', 1)],
+      const [],
+      const [],
+      [
+        _p('p1', 'cf', 'Cà phê sữa đá', 29000),
+        _p('p2', 'cf', 'Espresso', 35000),
+        _p('p3', 'cf', 'Bạc xỉu', 32000),
+        _p('p4', 'tea', 'Matcha Latte', 52000),
+      ],
+    );
+
 /// Pumps the app already signed-in as [staffRole], landing straight on that
-/// role's shell (CASHIER→POS, BARISTA→KDS, MANAGER/ADMIN→admin).
+/// role's shell (CASHIER→POS, BARISTA→KDS, MANAGER/ADMIN→admin), with a
+/// preloaded offline menu.
 Future<void> pumpSignedIn(
   WidgetTester t, {
   required String staffRole,
@@ -32,7 +63,8 @@ Future<void> pumpSignedIn(
   // Let TinyPosApp create AppState via the provider (so it's disposed at test
   // end and the KDS 1s timer is cancelled — no "pending timer" assertion).
   final session = SessionState()..debugSignIn(fakeUser(staffRole));
-  await t.pumpWidget(TinyPosApp(session: session));
+  final menu = PosMenuController(session.api)..debugSetMenu(fakeMenu());
+  await t.pumpWidget(TinyPosApp(session: session, menu: menu));
   await t.pump();
   await t.pump(const Duration(milliseconds: 450));
 }

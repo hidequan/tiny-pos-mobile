@@ -4,6 +4,14 @@ Phát hành test qua **Firebase App Distribution** (group `testers`). Mỗi bả
 tăng `version` trong `pubspec.yaml` → push `main` → GitHub Actions tự build APK/AAB,
 chạy `flutter test`, và phát hành cho tester.
 
+## v0.2.1 — Thực đơn thật (thu ngân)
+- Màn Bán hàng nạp **thực đơn thật** từ `GET /pos/menu` (cùng dữ liệu với web): nhóm,
+  sản phẩm, **ảnh thật**, giá, tồn kho (Hết hàng), tìm kiếm. Có loading / lỗi + thử lại.
+- Model menu (categories/sizes/toppings/products + variants), `PosMenuController` (cache).
+  Sản phẩm có tu biến (size/topping) mở sheet chọn; còn lại thêm thẳng.
+- Giỏ hàng/thanh toán tạm vẫn cục bộ (chưa ghi server) — lớp bill API ở bản kế. Đã verify
+  end-to-end: đăng nhập cashier01 → menu production hiển thị đúng (ảnh + giá thật).
+
 ## v0.2.0 — Tích hợp backend dùng chung (nền tảng)
 - **Đăng nhập thật** username/password vào API dùng chung với web
   (https://pos.lptech.info.vn/api) — "app và web là 1". Định tuyến theo `staffRole`

@@ -36,17 +36,11 @@ void main() {
     await pumpSignedIn(t, staffRole: 'CASHIER');
     noCrash(t, 'enter cashier / sell');
 
+    // Real menu products (no modifiers) add directly to the cart.
     await tap(t, txt('Cà phê sữa đá'));
-    noCrash(t, 'open product options sheet');
-    await tap(t, txt('L'));
-    await tap(t, txt('50%'));
-    await tap(t, txt('Trân châu'));
-    noCrash(t, 'select options');
-    await tap(t, find.textContaining('Thêm ·'));
-    noCrash(t, 'confirm add to cart');
-
+    noCrash(t, 'add product to cart');
     await tap(t, txt('Espresso'));
-    noCrash(t, 'add simple product');
+    noCrash(t, 'add another product');
 
     await tap(t, txt('Xem đơn'));
     noCrash(t, 'open cart sheet');
@@ -110,7 +104,7 @@ void main() {
     await tap(t, find.byIcon(Icons.close_rounded));
     await t.enterText(find.byType(TextField).first, 'zzzzz');
     await beat(t);
-    expect(find.text('Không tìm thấy món'), findsOneWidget);
+    expect(find.text('Không có món'), findsOneWidget);
     await tap(t, find.byIcon(Icons.close_rounded));
     expect(find.text('Cà phê sữa đá'), findsWidgets);
     noCrash(t, 'search clear');

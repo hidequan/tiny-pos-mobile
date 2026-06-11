@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/models.dart';
 import '../data/seed.dart';
+import '../models/menu.dart';
 
 /// Central app state + business logic. A faithful port of the `S` state object
 /// and the mutation functions in `tinypos.html`.
@@ -211,6 +212,36 @@ class AppState extends ChangeNotifier {
 
   /// Add a product with no options directly to the cart.
   void addSimple(Product p) => _addLine(p, const ModSel(), 1);
+
+  /// Bridge a REAL menu product (from /pos/menu) into the local cart, so the
+  /// existing cart/payment UI works while the bill-write API layer lands next.
+  void addMenuFromApi(
+    MenuProduct p, {
+    ProductVariant? variant,
+    List<MenuTopping> toppings = const [],
+    String note = '',
+    int qty = 1,
+  }) {
+    final extra = toppings.fold<int>(0, (a, t) => a + t.price);
+    final unit = (variant?.price ?? p.basePrice) + extra;
+    cart.add(CartLine(
+      lid: '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(99999)}',
+      pid: p.id,
+      name: p.name,
+      emoji: '🥤',
+      price: unit,
+      qty: qty,
+      mods: ModSel(
+        size: variant?.sizeName,
+        tops: toppings.map((t) => t.name).toList(),
+        note: note,
+        extra: extra,
+      ),
+      station: 'bar',
+    ));
+    _save();
+    notifyListeners();
+  }
 
   void _addLine(Product p, ModSel o, int qty) {
     cart.add(CartLine(

@@ -24,7 +24,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.screenshot({ path: `${OUT}/login-02-filled.png` });
   console.log('shot login-02-filled');
 
-  await page.mouse.click(195, 409); await wait(5000); // submit + navigate
+  await page.mouse.click(195, 409); await wait(10000); // submit + navigate
   await page.screenshot({ path: `${OUT}/login-03-after.png` });
   console.log('shot login-03-after');
 
