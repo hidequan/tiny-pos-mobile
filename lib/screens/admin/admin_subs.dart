@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
+import '../../state/admin_data_controller.dart';
 import '../../data/seed.dart';
 import '../../theme/palette.dart';
 import '../../theme/typography.dart';
@@ -11,49 +12,73 @@ import 'admin_widgets.dart';
 import 'admin_sheets.dart';
 
 /// Nhân viên & RBAC.
-class StaffScreen extends StatelessWidget {
+class StaffScreen extends StatefulWidget {
   const StaffScreen({super.key});
+  @override
+  State<StaffScreen> createState() => _StaffScreenState();
+}
 
+class _StaffScreenState extends State<StaffScreen> {
   static const _roles = [
     ['admin', 'Quản trị'],
     ['cashier', 'Thu ngân'],
     ['barista', 'Pha chế'],
   ];
 
-  BadgeColor _badge(String role) =>
-      {'admin': BadgeColor.red, 'cashier': BadgeColor.blue, 'barista': BadgeColor.green}[role]!;
+  @override
+  void initState() {
+    super.initState();
+    final a = context.read<AdminDataController>();
+    WidgetsBinding.instance.addPostFrameCallback((_) => a.ensureStaff());
+  }
+
+  BadgeColor _badge(String staffRole) => switch (staffRole) {
+        'CASHIER' => BadgeColor.blue,
+        'BARISTA' => BadgeColor.green,
+        _ => BadgeColor.red,
+      };
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    final a = context.watch<AdminDataController>();
+    final p = context.palette;
     return Column(children: [
-      BackBar(title: 'Nhân viên', sub: 'RBAC · ${state.staff.length} người'),
+      BackBar(title: 'Nhân viên', sub: a.staffLoaded ? 'RBAC · ${a.staff.length} người' : 'Đang tải…'),
       Expanded(
         child: ListView(
           padding: const EdgeInsets.only(bottom: 16),
           children: [
             SectionHeader('Danh sách nhân viên', action: '+ Thêm', onAction: () => openAddStaff(context)),
-            CardBox(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              clip: true,
-              padding: EdgeInsets.zero,
-              child: RowList([
-                for (final s in state.staff)
-                  ListRow(
-                    leading: Avatar(s.name.split(' ').last[0]),
-                    title: s.name,
-                    subtitle: '${s.phone} · ${s.br}',
-                    trailing: Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
-                      AppBadge('${Seed.roleMeta[s.role]![2]} ${Seed.roleMeta[s.role]![0]}', color: _badge(s.role)),
-                      const SizedBox(height: 6),
-                      SwitchDot(on: s.active, onTap: () {
-                        state.toggleStaff(s.id);
-                        context.shell.toast('${s.name}${s.active ? ': đang hoạt động' : ': đã khóa'}', 'user');
-                      }),
-                    ]),
-                  ),
-              ]),
-            ),
+            if (a.staffLoading && !a.staffLoaded)
+              Padding(padding: const EdgeInsets.all(28), child: Center(child: CircularProgressIndicator(color: p.terracotta)))
+            else if (a.staffError != null && !a.staffLoaded)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Column(children: [
+                  Text(a.staffError!, style: AppType.body(size: 13, color: p.muted)),
+                  const SizedBox(height: 12),
+                  AppButton('Thử lại', icon: 'history', onTap: () => a.loadStaff()),
+                ]),
+              )
+            else
+              CardBox(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                clip: true,
+                padding: EdgeInsets.zero,
+                child: RowList([
+                  for (final s in a.staff)
+                    ListRow(
+                      leading: Avatar(s.initials),
+                      title: s.fullName.trim().isEmpty ? s.username : s.fullName,
+                      subtitle: '@${s.username}',
+                      trailing: Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
+                        AppBadge(s.roleLabel, color: _badge(s.staffRole)),
+                        const SizedBox(height: 6),
+                        AppBadge(s.active ? 'Hoạt động' : 'Đã khóa', color: s.active ? BadgeColor.green : BadgeColor.gray),
+                      ]),
+                    ),
+                ]),
+              ),
             const SectionHeader('Phân quyền theo vai trò'),
             CardBox(
               margin: const EdgeInsets.symmetric(horizontal: 16),

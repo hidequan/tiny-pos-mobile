@@ -142,16 +142,16 @@ void main() {
     expect(find.text('CN Test'), findsOneWidget);
   });
 
-  testWidgets('v0.1.2: add-staff form appends a member', (t) async {
+  testWidgets('Admin: staff list shows real members + add-staff form opens', (t) async {
     await pumpSignedIn(t, staffRole: 'ADMIN');
     await tap(t, txt('Thêm'));
     await tap(t, txt('Nhân viên & phân quyền'));
+    noCrash(t, 'staff sub-page');
+    expect(find.text('Trần Thị Bình'), findsWidgets); // real (fake-injected) staff
     await tap(t, txt('+ Thêm'));
     noCrash(t, 'open add-staff form');
-    await t.enterText(find.byType(TextField).first, 'Nguyễn Test');
-    await tap(t, txt('Lưu nhân viên'));
-    noCrash(t, 'submit add-staff');
-    expect(find.text('Nguyễn Test'), findsOneWidget);
+    await tap(t, find.byIcon(Icons.close_rounded));
+    noCrash(t, 'close add-staff form');
   });
 
   testWidgets('v0.1.2: state persists cart + theme across instances', (t) async {

@@ -1,0 +1,46 @@
+// Proof admin Thực đơn / Kho / Nhân viên read real data.
+// Serve build/web then: node tool/admin_read_test.cjs
+const puppeteer = require('C:/Users/This PC/AppData/Roaming/npm/node_modules/puppeteer');
+const URL = 'http://localhost:8099';
+const OUT = 'assets/store/screenshots';
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+(async () => {
+  const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-gpu', '--disable-web-security', '--user-data-dir=D:devpptr-nocors'] });
+  const page = await browser.newPage();
+  await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 3 });
+  page.on('console', (m) => { const t = m.text(); if (/error|exception/i.test(t)) console.log('PAGE:', t.slice(0, 140)); });
+  const reqs = [];
+  page.on('response', (r) => { const u = r.url(); if (/\/pos\/menu|\/admin\/(users|inventory|bom|ingredients)/.test(u)) reqs.push(`${r.status()} ${u.split('/api')[1].split('?')[0]}`); });
+
+  await page.goto(URL, { waitUntil: 'networkidle2', timeout: 60000 });
+  await wait(2500);
+  await page.evaluate(() => { try { localStorage.clear(); } catch (e) {} });
+  await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+  await wait(5000);
+  await page.mouse.click(195, 270); await wait(500);
+  await page.keyboard.type('manager01', { delay: 40 }); await wait(300);
+  await page.mouse.click(195, 334); await wait(500);
+  await page.keyboard.type('manager123', { delay: 40 }); await wait(300);
+  await page.mouse.click(195, 409); await wait(9000); // admin home
+
+  // admin nav: 5 tabs → home 39, Thực đơn 117, Kho 195, Báo cáo 273, Thêm 351 @ y812
+  await page.mouse.click(117, 812); await wait(3500);
+  await page.screenshot({ path: `${OUT}/admin-03-menu.png` }); console.log('shot admin-03-menu');
+
+  await page.mouse.click(195, 812); await wait(3500);
+  await page.screenshot({ path: `${OUT}/admin-04-kho.png` }); console.log('shot admin-04-kho');
+  // BOM tab (segmented, right half ~x=280 y=148)
+  await page.mouse.click(280, 150); await wait(1500);
+  await page.screenshot({ path: `${OUT}/admin-05-bom.png` }); console.log('shot admin-05-bom');
+
+  // Thêm → Nhân viên row
+  await page.mouse.click(351, 812); await wait(2000);
+  await page.mouse.click(30, 52); await wait(1500); // back to the Quản lý list (if a sub-page was restored)
+  await page.mouse.click(195, 120); await wait(3000); // row 1 (Nhân viên & phân quyền)
+  await page.screenshot({ path: `${OUT}/admin-06-staff.png` }); console.log('shot admin-06-staff');
+
+  console.log('requests:', reqs.length ? reqs.join(' | ') : '(none)');
+  await browser.close();
+  console.log('done');
+})().catch((e) => { console.error('ERR', e.message); process.exit(1); });

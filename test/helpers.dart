@@ -8,16 +8,19 @@ import 'package:tiny_pos_mobile/api/bill_repository.dart';
 import 'package:tiny_pos_mobile/api/kds_repository.dart';
 import 'package:tiny_pos_mobile/api/table_repository.dart';
 import 'package:tiny_pos_mobile/api/reports_repository.dart';
+import 'package:tiny_pos_mobile/api/admin_repository.dart';
 import 'package:tiny_pos_mobile/state/bills_controller.dart';
 import 'package:tiny_pos_mobile/state/kds_controller.dart';
 import 'package:tiny_pos_mobile/state/tables_controller.dart';
 import 'package:tiny_pos_mobile/state/reports_controller.dart';
+import 'package:tiny_pos_mobile/state/admin_data_controller.dart';
 import 'package:tiny_pos_mobile/models/auth_user.dart';
 import 'package:tiny_pos_mobile/models/menu.dart';
 import 'package:tiny_pos_mobile/models/bill.dart';
 import 'package:tiny_pos_mobile/models/kds.dart';
 import 'package:tiny_pos_mobile/models/table.dart';
 import 'package:tiny_pos_mobile/models/report.dart';
+import 'package:tiny_pos_mobile/models/admin.dart';
 
 /// A no-op KdsRepository returning canned tickets for widget tests.
 class FakeKdsRepository extends KdsRepository {
@@ -60,6 +63,27 @@ class FakeReportsRepository extends ReportsRepository {
   Future<List<PayMethodStat>> paymentMethods({DateTime? from, DateTime? to}) async => [
         PayMethodStat(method: 'CASH', amount: 2800000, count: 96),
         PayMethodStat(method: 'QR', amount: 1450000, count: 46),
+      ];
+}
+
+/// A no-op AdminRepository with canned master data for widget tests.
+class FakeAdminRepository extends AdminRepository {
+  FakeAdminRepository(super.api);
+  @override
+  Future<List<StaffMember>> users() async => [
+        StaffMember(id: 'u1', username: 'cashier01', fullName: 'Trần Thị Bình', staffRole: 'CASHIER', status: 'ACTIVE'),
+        StaffMember(id: 'u2', username: 'barista01', fullName: 'Quách Đông', staffRole: 'BARISTA', status: 'ACTIVE'),
+      ];
+  @override
+  Future<List<StockBalance>> inventoryBalances() async => [
+        StockBalance(id: 'b1', code: 'CF-BEAN', name: 'Cà phê hạt', unit: 'g', onHand: 9906, reserved: 112, minStock: 500),
+        StockBalance(id: 'b2', code: 'MILK', name: 'Sữa tươi', unit: 'ml', onHand: 300, reserved: 0, minStock: 1000),
+      ];
+  @override
+  Future<List<BomRecipe>> bomRecipes() async => [
+        BomRecipe(id: 'r1', name: 'BOM Trân châu', isActive: true, items: [
+          BomItem(ingredientName: 'Bột năng', quantity: 50, unit: 'g'),
+        ]),
       ];
 }
 
@@ -201,8 +225,25 @@ Future<void> pumpSignedIn(
       bestSellers: [BestSeller(productName: 'Cà phê sữa đá', quantity: 88, revenue: 2552000)],
       payments: [PayMethodStat(method: 'CASH', amount: 2800000, count: 96)],
     );
+  final adminData = AdminDataController(FakeAdminRepository(session.api))
+    ..debugSet(
+      staff: [
+        StaffMember(id: 'u1', username: 'cashier01', fullName: 'Trần Thị Bình', staffRole: 'CASHIER', status: 'ACTIVE'),
+        StaffMember(id: 'u2', username: 'barista01', fullName: 'Quách Đông', staffRole: 'BARISTA', status: 'ACTIVE'),
+      ],
+      balances: [
+        StockBalance(id: 'b1', code: 'CF-BEAN', name: 'Cà phê hạt', unit: 'g', onHand: 9906, reserved: 112, minStock: 500),
+        StockBalance(id: 'b2', code: 'MILK', name: 'Sữa tươi', unit: 'ml', onHand: 300, reserved: 0, minStock: 1000),
+      ],
+      boms: [
+        BomRecipe(id: 'r1', name: 'BOM Trân châu', isActive: true, items: [
+          BomItem(ingredientName: 'Bột năng', quantity: 50, unit: 'g'),
+        ]),
+      ],
+    );
   await t.pumpWidget(TinyPosApp(
-      session: session, menu: menu, billRepo: billRepo, bills: bills, kds: kds, tables: tables, reports: reports));
+      session: session, menu: menu, billRepo: billRepo, bills: bills, kds: kds, tables: tables,
+      reports: reports, adminData: adminData));
   await t.pump();
   await t.pump(const Duration(milliseconds: 450));
 }
