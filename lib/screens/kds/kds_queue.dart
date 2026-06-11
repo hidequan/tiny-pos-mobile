@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../state/app_state.dart';
-import '../../data/models.dart';
+import '../../state/kds_controller.dart';
+import '../../models/kds.dart';
 import '../../theme/palette.dart';
 import '../../theme/typography.dart';
 import '../../theme/app_icons.dart';
@@ -10,66 +10,97 @@ import '../../widgets/common.dart';
 import '../../widgets/shell.dart';
 import 'kds_profile.dart';
 
-class KdsQueueScreen extends StatelessWidget {
+String fmtAgo(int s) => '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
+
+/// KDS / Bar queue — real tickets from /kds/tickets (polled).
+class KdsQueueScreen extends StatefulWidget {
   const KdsQueueScreen({super.key});
+  @override
+  State<KdsQueueScreen> createState() => _KdsQueueScreenState();
+}
+
+class _KdsQueueScreenState extends State<KdsQueueScreen> {
+  KdsController? _ctl;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _ctl = context.read<KdsController>();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctl = _ctl;
+      if (ctl == null || !mounted) return;
+      if (!ctl.loaded) ctl.load();
+      ctl.startPolling();
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctl?.stopPolling(); // saved ref — context.read is unsafe in dispose
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    final ctl = context.watch<KdsController>();
     final p = context.palette;
-    final f = state.kdsFilter;
-
-    // Filter items per ticket by station, keep tickets that still have items.
-    final tickets = state.kds
-        .map((t) => (
-              ticket: t,
-              items: f == 'all' ? t.items : t.items.where((i) => i.st == f).toList(),
-            ))
-        .where((e) => e.items.isNotEmpty)
-        .toList();
-
-    final pending = state.kds.length;
-    final waiting = state.kds.isEmpty ? 0 : (state.kds.fold(0, (a, t) => a + t.ago) / state.kds.length).round();
+    final now = DateTime.now();
 
     return Column(children: [
       TopBar(
         title: 'Pha chế · Bar',
-        subtitle: Text('Chi nhánh Cầu Giấy · real-time',
+        subtitle: Text('Hàng chờ real-time',
             style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
         actions: [
-          IconBtn('bell', dot: true, onTap: () => context.shell.toast('Có đơn mới cần pha', 'bell')),
+          IconBtn('bell', dot: ctl.stats.waiting > 0, onTap: () => ctl.load()),
           Avatar('QD', colors: const [Color(0xFF3F8F5B), Color(0xFF6FB07A)], onTap: () => openKdsProfile(context)),
         ],
       ),
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
         child: Row(children: [
-          Expanded(child: _statBox(context, '$pending', 'Đơn đang chờ', p.terracotta)),
+          Expanded(child: _statBox(context, '${ctl.stats.waiting}', 'Đơn đang chờ', p.terracotta)),
           const SizedBox(width: 10),
-          Expanded(child: _statBox(context, fmtAgo(waiting), 'Thời gian chờ TB', p.ink)),
+          Expanded(child: _statBox(context, '${ctl.stats.preparing}', 'Đang pha', p.ink)),
           const SizedBox(width: 10),
-          Expanded(child: _statBox(context, '${state.kdsDone.length}', 'Xong gần đây', p.greenD)),
+          Expanded(child: _statBox(context, '${ctl.stats.completed}', 'Đã xong', p.greenD)),
         ]),
       ),
-      ChipsRow(children: [
-        for (final c in const [
-          ['all', 'Tất cả', '✨'],
-          ['bar', 'Quầy pha chế', '🧋'],
-          ['kitchen', 'Bếp / bánh', '🥐'],
-        ])
-          PillChip(c[1], emoji: c[2], on: f == c[0], onTap: () => state.setKdsFilter(c[0])),
-      ]),
-      Expanded(
-        child: tickets.isEmpty
-            ? const EmptyState(emoji: '✅', title: 'Không còn đơn nào', sub: 'Tất cả đã pha xong. Nghỉ tay chút nhé!')
-            : ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 2, 16, 16),
-                itemCount: tickets.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 12),
-                itemBuilder: (_, i) => _TicketCard(ticket: tickets[i].ticket, visibleItems: tickets[i].items),
-              ),
-      ),
+      Expanded(child: _body(context, ctl, now)),
     ]);
+  }
+
+  Widget _body(BuildContext context, KdsController ctl, DateTime now) {
+    final p = context.palette;
+    if (ctl.loading && !ctl.loaded) {
+      return Center(child: CircularProgressIndicator(color: p.terracotta));
+    }
+    if (ctl.error != null && !ctl.loaded) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('📡', style: TextStyle(fontSize: 42)),
+          const SizedBox(height: 10),
+          Text(ctl.error!, style: AppType.body(size: 13, color: p.muted)),
+          const SizedBox(height: 16),
+          AppButton('Thử lại', icon: 'history', onTap: () => ctl.load()),
+        ]),
+      );
+    }
+    final tickets = ctl.tickets;
+    if (tickets.isEmpty) {
+      return const EmptyState(emoji: '✅', title: 'Không còn đơn nào', sub: 'Tất cả đã pha xong. Nghỉ tay chút nhé!');
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 16),
+      itemCount: tickets.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      itemBuilder: (_, i) => _TicketCard(ticket: tickets[i], now: now),
+    );
   }
 
   Widget _statBox(BuildContext context, String value, String label, Color color) {
@@ -80,7 +111,8 @@ class KdsQueueScreen extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
         Text(value, style: AppType.display(size: 21, height: 1, color: color)),
         const SizedBox(height: 4),
-        Text(label, style: AppType.body(size: 11, weight: FontWeight.w700, color: p.ink2)),
+        Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: AppType.body(size: 11, weight: FontWeight.w700, color: p.ink2)),
       ]),
     );
   }
@@ -88,25 +120,17 @@ class KdsQueueScreen extends StatelessWidget {
 
 class _TicketCard extends StatelessWidget {
   final KdsTicket ticket;
-  final List<KdsItem> visibleItems;
-  const _TicketCard({required this.ticket, required this.visibleItems});
+  final DateTime now;
+  const _TicketCard({required this.ticket, required this.now});
 
   @override
   Widget build(BuildContext context) {
-    final state = context.read<AppState>();
-    // Rebuild only this card (timer text + accent colours) on each 1s tick,
-    // instead of rebuilding the whole KDS screen.
-    return ValueListenableBuilder<int>(
-      valueListenable: state.kdsTick,
-      builder: (context, _, _) => _card(context, state),
-    );
-  }
-
-  Widget _card(BuildContext context, AppState state) {
+    final ctl = context.read<KdsController>();
     final p = context.palette;
-    final accent = ticket.ago >= 360 ? p.red : (ticket.ago >= 180 ? p.amber : p.green);
-    final timerColor = ticket.ago >= 360 ? p.red : (ticket.ago >= 180 ? p.amber : p.greenD);
-    final allOk = visibleItems.every((i) => i.ok);
+    final ago = ticket.agoSeconds(now);
+    final accent = ago >= 360 ? p.red : (ago >= 180 ? p.amber : p.green);
+    final timerColor = ago >= 360 ? p.red : (ago >= 180 ? p.amber : p.greenD);
+    final allDone = ticket.allDone;
 
     return Container(
       decoration: BoxDecoration(
@@ -118,86 +142,64 @@ class _TicketCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // left accent bar via a Row
           IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  width: 5,
-                  decoration: BoxDecoration(
-                    color: accent,
-                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // header
-                      Container(
-                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-                        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.line2))),
-                        child: Row(children: [
-                          // Left group (type badge + code + NEW) scales down to
-                          // fit so the row never overflows on narrow cards.
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                AppBadge(
-                                  ticket.type == 'dinein' ? '🪑 Bàn ${ticket.table ?? '—'}' : '🥡 Mang đi',
-                                  color: ticket.type == 'dinein' ? BadgeColor.blue : BadgeColor.gray,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(ticket.code, style: AppType.display(size: 17, weight: FontWeight.w700, color: p.ink)),
-                                if (ticket.isNew) ...[
-                                  const SizedBox(width: 6),
-                                  const AppBadge('MỚI', color: BadgeColor.red, pulse: true),
-                                ],
-                              ]),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Container(
+                width: 5,
+                decoration: BoxDecoration(color: accent, borderRadius: const BorderRadius.horizontal(left: Radius.circular(16))),
+              ),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+                    decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.line2))),
+                    child: Row(children: [
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            AppBadge(
+                              ticket.isDineIn ? '🪑 Bàn ${ticket.tableLabel ?? '—'}' : '🥡 Mang đi',
+                              color: ticket.isDineIn ? BadgeColor.blue : BadgeColor.gray,
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(fmtAgo(ticket.ago), style: AppType.body(size: 13, weight: FontWeight.w800, color: timerColor)),
-                          const SizedBox(width: 5),
-                          Icon(AppIcons.get('clock'), size: 14, color: timerColor),
-                        ]),
-                      ),
-                      // items
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
-                        child: Column(
-                          children: [
-                            for (var k = 0; k < visibleItems.length; k++)
-                              _item(context, state, visibleItems[k], k > 0),
-                          ],
+                            const SizedBox(width: 8),
+                            Text(ticket.ticketCode, style: AppType.display(size: 16, weight: FontWeight.w700, color: p.ink)),
+                          ]),
                         ),
                       ),
-                    ],
+                      const SizedBox(width: 8),
+                      Text(fmtAgo(ago), style: AppType.body(size: 13, weight: FontWeight.w800, color: timerColor)),
+                      const SizedBox(width: 5),
+                      Icon(AppIcons.get('clock'), size: 14, color: timerColor),
+                    ]),
                   ),
-                ),
-              ],
-            ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
+                    child: Column(children: [
+                      for (var k = 0; k < ticket.items.length; k++) _item(context, ctl, ticket.items[k], k > 0),
+                    ]),
+                  ),
+                ]),
+              ),
+            ]),
           ),
-          // footer
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
             child: Row(children: [
               Expanded(
                 child: AppButton('Tem', icon: 'print', variant: BtnVariant.ghost,
-                    onTap: () => context.shell.toast('In tem món ${ticket.code}', 'print')),
+                    onTap: () => context.shell.toast('In tem món ${ticket.ticketCode}', 'print')),
               ),
               const SizedBox(width: 9),
               Expanded(
                 child: AppButton(
-                  allOk ? 'Hoàn thành' : 'Xong tất cả',
+                  allDone ? 'Hoàn thành' : 'Xong tất cả',
                   icon: 'check',
-                  variant: allOk ? BtnVariant.pri : BtnVariant.dark,
+                  variant: allDone ? BtnVariant.pri : BtnVariant.dark,
                   onTap: () {
-                    state.bumpTicket(ticket.code);
-                    context.shell.toast('Đơn ${ticket.code} đã hoàn thành', 'check');
+                    ctl.bumpTicket(ticket.id);
+                    context.shell.toast('Đơn ${ticket.ticketCode} đã hoàn thành', 'check');
                   },
                 ),
               ),
@@ -208,11 +210,11 @@ class _TicketCard extends StatelessWidget {
     );
   }
 
-  Widget _item(BuildContext context, AppState state, KdsItem item, bool border) {
+  Widget _item(BuildContext context, KdsController ctl, KdsTicketItem item, bool border) {
     final p = context.palette;
-    final gi = ticket.items.indexOf(item);
+    final busy = ctl.itemBusy(item.id);
     return GestureDetector(
-      onTap: () => state.toggleKdsItem(ticket.code, gi),
+      onTap: item.done || busy ? null : () => ctl.markItemDone(item.id),
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -221,38 +223,37 @@ class _TicketCard extends StatelessWidget {
           Container(
             constraints: const BoxConstraints(minWidth: 26),
             height: 26,
-            decoration: BoxDecoration(color: item.ok ? p.green : p.espresso, borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: item.done ? p.green : p.espresso, borderRadius: BorderRadius.circular(8)),
             alignment: Alignment.center,
-            child: Text('${item.q}', style: AppType.body(size: 13, weight: FontWeight.w800, color: Colors.white)),
+            child: Text('${item.quantity}', style: AppType.body(size: 13, weight: FontWeight.w800, color: Colors.white)),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-              Text(item.n,
-                  style: AppType.body(size: 14.5, weight: FontWeight.w700, color: item.ok ? p.muted : p.ink).copyWith(
-                      decoration: item.ok ? TextDecoration.lineThrough : null)),
-              if (item.mod.isNotEmpty) ...[
+              Text(
+                item.variantName != null && item.variantName!.isNotEmpty ? '${item.productName} (${item.variantName})' : item.productName,
+                style: AppType.body(size: 14.5, weight: FontWeight.w700, color: item.done ? p.muted : p.ink)
+                    .copyWith(decoration: item.done ? TextDecoration.lineThrough : null),
+              ),
+              if (item.mods.isNotEmpty) ...[
                 const SizedBox(height: 2),
-                Text(item.mod, style: AppType.body(size: 12, weight: FontWeight.w500, color: p.ink2)),
+                Text(item.mods, style: AppType.body(size: 12, weight: FontWeight.w500, color: p.ink2)),
               ],
             ]),
           ),
           const SizedBox(width: 8),
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: AppBadge(item.st == 'bar' ? 'Bar' : 'Bếp', color: item.st == 'bar' ? BadgeColor.blue : BadgeColor.amber),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            width: 26,
-            height: 26,
-            decoration: BoxDecoration(
-              color: item.ok ? p.green : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: item.ok ? p.green : p.line2, width: 2),
-            ),
-            child: item.ok ? const Icon(Icons.check_rounded, size: 15, color: Colors.white) : null,
-          ),
+          busy
+              ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.2, color: p.muted))
+              : Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: item.done ? p.green : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: item.done ? p.green : p.line2, width: 2),
+                  ),
+                  child: item.done ? const Icon(Icons.check_rounded, size: 15, color: Colors.white) : null,
+                ),
         ]),
       ),
     );

@@ -84,12 +84,9 @@ void main() {
   testWidgets('KDS: queue interactions + done + stats', (t) async {
     await pumpSignedIn(t, staffRole: 'BARISTA');
     noCrash(t, 'enter KDS queue');
-    await tap(t, txt('Bạc xỉu'));
-    noCrash(t, 'toggle kds item');
-    await tap(t, txt('Bếp / bánh'));
-    await tap(t, txt('Tất cả'));
-    noCrash(t, 'kds filters');
-    await tap(t, find.textContaining('Xong tất cả'));
+    await tap(t, txt('Cà phê sữa đá')); // tap a WAITING item -> mark done
+    noCrash(t, 'mark kds item done');
+    await tap(t, find.textContaining('Xong'));
     noCrash(t, 'bump ticket');
     await tap(t, txt('Đã xong'));
     noCrash(t, 'kds done tab');

@@ -5,10 +5,37 @@ import 'package:tiny_pos_mobile/main.dart';
 import 'package:tiny_pos_mobile/state/session.dart';
 import 'package:tiny_pos_mobile/state/menu_controller.dart';
 import 'package:tiny_pos_mobile/api/bill_repository.dart';
+import 'package:tiny_pos_mobile/api/kds_repository.dart';
 import 'package:tiny_pos_mobile/state/bills_controller.dart';
+import 'package:tiny_pos_mobile/state/kds_controller.dart';
 import 'package:tiny_pos_mobile/models/auth_user.dart';
 import 'package:tiny_pos_mobile/models/menu.dart';
 import 'package:tiny_pos_mobile/models/bill.dart';
+import 'package:tiny_pos_mobile/models/kds.dart';
+
+/// A no-op KdsRepository returning canned tickets for widget tests.
+class FakeKdsRepository extends KdsRepository {
+  FakeKdsRepository(super.api);
+  @override
+  Future<List<KdsTicket>> tickets() async => _fakeTickets();
+  @override
+  Future<KdsStats> stats() async => KdsStats(1, 1, 3);
+  @override
+  Future<void> readyItem(String itemId) async {}
+  @override
+  Future<void> completeTicket(String id) async {}
+}
+
+List<KdsTicket> _fakeTickets() => [
+      KdsTicket(
+        id: 't1', ticketCode: 'T260611-0001', status: 'WAITING', tableLabel: null,
+        serviceType: 'TAKE_AWAY', sentAt: null,
+        items: [
+          KdsTicketItem(id: 'i1', status: 'WAITING', productName: 'Cà phê sữa đá', variantName: null, quantity: 2, mods: 'M · 70% đường'),
+          KdsTicketItem(id: 'i2', status: 'READY', productName: 'Bạc xỉu', variantName: null, quantity: 1, mods: ''),
+        ],
+      ),
+    ];
 
 /// A BillRepository that returns canned bills (no network) for widget tests.
 class FakeBillRepository extends BillRepository {
@@ -97,7 +124,8 @@ Future<void> pumpSignedIn(
         note: null, paidAt: null, createdAt: null, items: const [],
       ),
     ]);
-  await t.pumpWidget(TinyPosApp(session: session, menu: menu, billRepo: billRepo, bills: bills));
+  final kds = KdsController(FakeKdsRepository(session.api))..debugSetData(_fakeTickets(), KdsStats(1, 1, 3));
+  await t.pumpWidget(TinyPosApp(session: session, menu: menu, billRepo: billRepo, bills: bills, kds: kds));
   await t.pump();
   await t.pump(const Duration(milliseconds: 450));
 }
