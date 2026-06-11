@@ -75,6 +75,12 @@ class BillRepository {
     return _billFrom(data);
   }
 
+  /// Full bill (with line items) — GET /pos/bills/{id}. Used for receipts.
+  Future<Bill> getBill(String billId) async {
+    final data = await api.get('/pos/bills/$billId');
+    return Bill.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
   Future<List<Bill>> listBills() async {
     final data = await api.get('/pos/bills');
     final list = data is List ? data : ((data as Map)['items'] ?? (data)['data'] ?? []) as List;

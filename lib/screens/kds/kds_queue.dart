@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../state/kds_controller.dart';
 import '../../models/kds.dart';
+import '../../services/receipt.dart';
 import '../../theme/palette.dart';
 import '../../theme/typography.dart';
 import '../../theme/app_icons.dart';
@@ -189,7 +190,7 @@ class _TicketCard extends StatelessWidget {
             child: Row(children: [
               Expanded(
                 child: AppButton('Tem', icon: 'print', variant: BtnVariant.ghost,
-                    onTap: () => context.shell.toast('In tem món ${ticket.ticketCode}', 'print')),
+                    onTap: () => _printLabels(context)),
               ),
               const SizedBox(width: 9),
               Expanded(
@@ -208,6 +209,18 @@ class _TicketCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _printLabels(BuildContext context) async {
+    final items = [
+      for (final it in ticket.items)
+        LabelItem(productName: it.productName, variantName: it.variantName, mods: it.mods, quantity: it.quantity),
+    ];
+    try {
+      await ReceiptService.printLabels(ticket.ticketCode, items);
+    } catch (_) {
+      if (context.mounted) context.shell.toast('Không mở được bản in tem', 'edit');
+    }
   }
 
   Widget _item(BuildContext context, KdsController ctl, KdsTicketItem item, bool border) {

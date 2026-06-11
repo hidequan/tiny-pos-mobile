@@ -8,6 +8,7 @@ import '../../state/tables_controller.dart';
 import '../../api/bill_repository.dart';
 import '../../api/api_client.dart';
 import '../../models/bill.dart';
+import '../../services/receipt.dart';
 import '../../data/models.dart';
 import '../../data/seed.dart';
 import '../../theme/palette.dart';
@@ -673,15 +674,20 @@ class _PaySheetState extends State<_PaySheet> {
     state.setCheckoutBusy(true);
     try {
       final paid = await repo.payCash(bill.id, received: received);
+      Bill full = paid;
+      try {
+        full = await repo.getBill(paid.id);
+      } catch (_) {/* fall back to the pay response */}
       if (!context.mounted) return;
       state.clearAfterCheckout();
       context.shell.showSheet((_) => _SuccessSheet(
-            code: paid.billCode,
-            total: paid.grandTotal,
+            code: full.billCode,
+            total: full.grandTotal,
             method: 'cash',
             received: received,
             otype: 'takeaway',
             table: null,
+            bill: full,
           ));
     } on ApiException catch (e) {
       if (!context.mounted) return;
@@ -791,15 +797,20 @@ class _QrPaySheetState extends State<_QrPaySheet> {
     final state = context.read<AppState>();
     try {
       final paid = await repo.confirmPayment(widget.qr.paymentId);
+      Bill full = paid;
+      try {
+        full = await repo.getBill(paid.id);
+      } catch (_) {/* fall back to the confirm response */}
       if (!context.mounted) return;
       state.clearAfterCheckout();
       context.shell.showSheet((_) => _SuccessSheet(
-            code: paid.billCode,
-            total: paid.grandTotal,
+            code: full.billCode,
+            total: full.grandTotal,
             method: 'qr',
             received: 0,
             otype: 'takeaway',
             table: null,
+            bill: full,
           ));
     } on ApiException catch (e) {
       if (!context.mounted) return;
@@ -820,6 +831,7 @@ class _SuccessSheet extends StatelessWidget {
   final int received;
   final String otype;
   final String? table;
+  final Bill? bill; // full paid bill — enables real receipt printing
   const _SuccessSheet({
     required this.code,
     required this.total,
@@ -827,6 +839,7 @@ class _SuccessSheet extends StatelessWidget {
     required this.received,
     required this.otype,
     this.table,
+    this.bill,
   });
 
   @override
@@ -877,10 +890,16 @@ class _SuccessSheet extends StatelessWidget {
       ),
       footer: Row(children: [
         Expanded(
-          child: AppButton('In bill', icon: 'print', large: true, variant: BtnVariant.ghost, onTap: () {
-            context.shell.closeSheet();
-            context.read<AppState>().afterPay();
-            context.shell.toast('Đang in hóa đơn...', 'print');
+          child: AppButton('In bill', icon: 'print', large: true, variant: BtnVariant.ghost, onTap: () async {
+            if (bill == null) {
+              context.shell.toast('Không có dữ liệu hoá đơn để in', 'edit');
+              return;
+            }
+            try {
+              await ReceiptService.printReceipt(bill!, method: method, received: received);
+            } catch (_) {
+              if (context.mounted) context.shell.toast('Không mở được bản in', 'edit');
+            }
           }),
         ),
         const SizedBox(width: 10),
