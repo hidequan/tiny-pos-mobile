@@ -85,6 +85,12 @@ class FakeAdminRepository extends AdminRepository {
           BomItem(ingredientName: 'Bột năng', quantity: 50, unit: 'g'),
         ]),
       ];
+  @override
+  Future<void> setProductStatus(String id, bool active) async {}
+  @override
+  Future<void> createProduct({required String categoryId, required String name, required int basePrice, bool active = true}) async {}
+  @override
+  Future<void> updateProduct(String id, {String? name, String? categoryId, int? basePrice, bool? active}) async {}
 }
 
 /// A no-op TableRepository with a canned floor map for widget tests.

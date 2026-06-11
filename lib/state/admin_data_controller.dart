@@ -21,6 +21,9 @@ class AdminDataController extends ChangeNotifier {
   bool invLoading = false;
   String? invError;
 
+  final Set<String> _productBusy = {};
+  bool productBusy(String id) => _productBusy.contains(id);
+
   int get lowStockCount => balances.where((b) => b.low).length;
 
   Future<void> loadStaff() async {
@@ -54,6 +57,52 @@ class AdminDataController extends ChangeNotifier {
     }
     invLoading = false;
     notifyListeners();
+  }
+
+  // ---- product writes (returns an error message, or null on success) ------
+
+  Future<String?> toggleProductStatus(String id, bool active) async {
+    if (_productBusy.contains(id)) return null;
+    _productBusy.add(id);
+    notifyListeners();
+    String? err;
+    try {
+      await repo.setProductStatus(id, active);
+    } on ApiException catch (e) {
+      err = e.message;
+    } catch (_) {
+      err = 'Không cập nhật được trạng thái';
+    }
+    _productBusy.remove(id);
+    notifyListeners();
+    return err;
+  }
+
+  Future<String?> createProduct({
+    required String categoryId,
+    required String name,
+    required int basePrice,
+    bool active = true,
+  }) async {
+    try {
+      await repo.createProduct(categoryId: categoryId, name: name, basePrice: basePrice, active: active);
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Không tạo được sản phẩm';
+    }
+  }
+
+  Future<String?> updateProduct(String id, {String? name, String? categoryId, int? basePrice, bool? active}) async {
+    try {
+      await repo.updateProduct(id, name: name, categoryId: categoryId, basePrice: basePrice, active: active);
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Không lưu được sản phẩm';
+    }
   }
 
   void ensureStaff() {

@@ -142,6 +142,30 @@ void main() {
     expect(find.text('CN Test'), findsOneWidget);
   });
 
+  testWidgets('Admin: edit-product form (prefilled) saves', (t) async {
+    await pumpSignedIn(t, staffRole: 'ADMIN');
+    await tap(t, txt('Thực đơn'));
+    noCrash(t, 'admin menu real');
+    await tap(t, txt('Cà phê sữa đá')); // product detail sheet
+    await tap(t, txt('Sửa sản phẩm')); // open edit form (name/category/price prefilled)
+    noCrash(t, 'open edit form');
+    await t.enterText(find.byType(TextField).last, '31000'); // change price
+    await beat(t);
+    await tap(t, txt('Lưu thay đổi')); // save (fake update = no-op)
+    noCrash(t, 'submit edit product');
+  });
+
+  testWidgets('Admin: create-product form opens + closes', (t) async {
+    await pumpSignedIn(t, staffRole: 'ADMIN');
+    await tap(t, txt('Thực đơn'));
+    await tap(t, find.byIcon(Icons.add_rounded)); // open create form
+    noCrash(t, 'open create form');
+    await t.enterText(find.byType(TextField).first, 'Trà Test App');
+    await beat(t);
+    await tap(t, find.byIcon(Icons.close_rounded));
+    noCrash(t, 'close create form');
+  });
+
   testWidgets('Admin: staff list shows real members + add-staff form opens', (t) async {
     await pumpSignedIn(t, staffRole: 'ADMIN');
     await tap(t, txt('Thêm'));
