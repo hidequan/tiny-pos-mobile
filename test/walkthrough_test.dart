@@ -70,9 +70,14 @@ void main() {
     noCrash(t, 'session detail sheet');
     await tap(t, find.byIcon(Icons.close_rounded));
     await tap(t, txt('Ca làm'));
-    noCrash(t, 'shift tab');
-    await tap(t, find.textContaining('ca'));
-    noCrash(t, 'toggle shift');
+    noCrash(t, 'shift tab (real open shift)');
+    expect(find.text('S260611-001'), findsWidgets); // real shift code
+    await tap(t, txt('Thu thêm')); // cash-in sheet
+    noCrash(t, 'cash-in sheet');
+    await tap(t, find.byIcon(Icons.close_rounded));
+    await tap(t, find.textContaining('Đóng ca')); // close-shift (denomination) sheet
+    noCrash(t, 'close-shift sheet');
+    await tap(t, find.byIcon(Icons.close_rounded));
   });
 
   testWidgets('v0.1.1: product search filters the grid', (t) async {

@@ -9,11 +9,13 @@ import 'package:tiny_pos_mobile/api/kds_repository.dart';
 import 'package:tiny_pos_mobile/api/table_repository.dart';
 import 'package:tiny_pos_mobile/api/reports_repository.dart';
 import 'package:tiny_pos_mobile/api/admin_repository.dart';
+import 'package:tiny_pos_mobile/api/shift_repository.dart';
 import 'package:tiny_pos_mobile/state/bills_controller.dart';
 import 'package:tiny_pos_mobile/state/kds_controller.dart';
 import 'package:tiny_pos_mobile/state/tables_controller.dart';
 import 'package:tiny_pos_mobile/state/reports_controller.dart';
 import 'package:tiny_pos_mobile/state/admin_data_controller.dart';
+import 'package:tiny_pos_mobile/state/shift_controller.dart';
 import 'package:tiny_pos_mobile/models/auth_user.dart';
 import 'package:tiny_pos_mobile/models/menu.dart';
 import 'package:tiny_pos_mobile/models/bill.dart';
@@ -21,6 +23,7 @@ import 'package:tiny_pos_mobile/models/kds.dart';
 import 'package:tiny_pos_mobile/models/table.dart';
 import 'package:tiny_pos_mobile/models/report.dart';
 import 'package:tiny_pos_mobile/models/admin.dart';
+import 'package:tiny_pos_mobile/models/shift.dart';
 
 /// A no-op KdsRepository returning canned tickets for widget tests.
 class FakeKdsRepository extends KdsRepository {
@@ -101,6 +104,29 @@ class FakeAdminRepository extends AdminRepository {
   Future<void> stockIn({required String branchId, required String ingredientId, required num quantity, String? reason}) async {}
   @override
   Future<void> adjustStock({required String branchId, required String ingredientId, required num quantity, required String reason}) async {}
+}
+
+/// A no-op ShiftRepository with a canned open shift for widget tests.
+class FakeShiftRepository extends ShiftRepository {
+  FakeShiftRepository(super.api);
+  Shift _shift() => Shift(
+        id: 's1', shiftCode: 'S260611-001', status: 'OPEN', openingCash: 500000,
+        expectedCash: 1871000, actualCash: null, difference: null, shiftType: 'CA_CHIEU',
+        openedAt: null, closedAt: null,
+        summary: ShiftSummary(
+            openingCash: 500000, cashSales: 1421000, cashIn: 0, cashOut: -50000,
+            cashRefund: 0, expectedCash: 1871000, sentToBarUnpaidCount: 3, pendingApprovals: 0),
+      );
+  @override
+  Future<Shift?> current() async => _shift();
+  @override
+  Future<Shift> open({required int openingCash, String? branchId}) async => _shift();
+  @override
+  Future<void> cashIn(String shiftId, {required int amount, String? reason}) async {}
+  @override
+  Future<void> cashOut(String shiftId, {required int amount, String? reason}) async {}
+  @override
+  Future<Shift> close(String shiftId, {required Map<int, int> denominations, String? note}) async => _shift();
 }
 
 /// A no-op TableRepository with a canned floor map for widget tests.
@@ -266,9 +292,18 @@ Future<void> pumpSignedIn(
         ]),
       ],
     );
+  final shifts = ShiftController(FakeShiftRepository(session.api))
+    ..debugSetShift(Shift(
+      id: 's1', shiftCode: 'S260611-001', status: 'OPEN', openingCash: 500000,
+      expectedCash: 1871000, actualCash: null, difference: null, shiftType: 'CA_CHIEU',
+      openedAt: null, closedAt: null,
+      summary: ShiftSummary(
+          openingCash: 500000, cashSales: 1421000, cashIn: 0, cashOut: -50000,
+          cashRefund: 0, expectedCash: 1871000, sentToBarUnpaidCount: 3, pendingApprovals: 0),
+    ));
   await t.pumpWidget(TinyPosApp(
       session: session, menu: menu, billRepo: billRepo, bills: bills, kds: kds, tables: tables,
-      reports: reports, adminData: adminData));
+      reports: reports, adminData: adminData, shifts: shifts));
   await t.pump();
   await t.pump(const Duration(milliseconds: 450));
 }
