@@ -96,11 +96,13 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.tinypos.tinyPosMobile   # must match Xcode + App Store Connect
     scripts:
+      - name: Disable Swift Package Manager (printing plugin lacks SPM support)
+        script: flutter config --no-enable-swift-package-manager
       - name: Flutter packages get
         script: flutter pub get
       - name: Install CocoaPods
         script: find . -name "Podfile" -execdir pod install \;
-      - name: Set up code signing
+      - name: Set up code signing (manual profiles from App Store Connect integration)
         script: xcode-project use-profiles
       - name: Build IPA
         script: |
