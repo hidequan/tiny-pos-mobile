@@ -99,6 +99,8 @@ class CartLine {
   int qty;
   final ModSel mods;
   final String station; // 'bar' | 'kitchen'
+  final String? variantId; // API variant (for real bill creation)
+  final List<String> toppingIds;
   CartLine({
     required this.lid,
     required this.pid,
@@ -108,6 +110,8 @@ class CartLine {
     required this.qty,
     required this.mods,
     required this.station,
+    this.variantId,
+    this.toppingIds = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -119,6 +123,8 @@ class CartLine {
         'qty': qty,
         'mods': mods.toJson(),
         'station': station,
+        'variantId': ?variantId,
+        'toppingIds': toppingIds,
       };
 
   factory CartLine.fromJson(Map<String, dynamic> j) => CartLine(
@@ -130,6 +136,10 @@ class CartLine {
         qty: j['qty'] as int,
         mods: ModSel.fromJson(Map<String, dynamic>.from(j['mods'] as Map)),
         station: j['station'] as String,
+        variantId: j['variantId'] as String?,
+        toppingIds: ((j['toppings'] as List?) ?? (j['toppingIds'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(),
       );
 }
 

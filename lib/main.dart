@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'state/app_state.dart';
 import 'state/session.dart';
 import 'state/menu_controller.dart';
+import 'api/bill_repository.dart';
 import 'theme/typography.dart';
 import 'widgets/phone_frame.dart';
 import 'widgets/app_scaffold.dart';
@@ -25,7 +26,8 @@ class TinyPosApp extends StatelessWidget {
   final AppState? app;
   final SessionState? session; // injected (already signed-in) by widget tests
   final PosMenuController? menu; // injected (preloaded) by widget tests
-  const TinyPosApp({super.key, this.app, this.session, this.menu});
+  final BillRepository? billRepo; // injected (fake) by widget tests
+  const TinyPosApp({super.key, this.app, this.session, this.menu, this.billRepo});
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +60,10 @@ class TinyPosApp extends StatelessWidget {
           ChangeNotifierProvider<PosMenuController>(
             create: (ctx) => PosMenuController(ctx.read<SessionState>().api),
           ),
+        if (billRepo != null)
+          Provider<BillRepository>.value(value: billRepo!)
+        else
+          Provider<BillRepository>(create: (ctx) => BillRepository(ctx.read<SessionState>().api)),
       ],
       child: material,
     );

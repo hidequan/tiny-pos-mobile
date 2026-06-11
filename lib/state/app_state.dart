@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/models.dart';
 import '../data/seed.dart';
 import '../models/menu.dart';
+import '../models/bill.dart';
 
 /// Central app state + business logic. A faithful port of the `S` state object
 /// and the mutation functions in `tinypos.html`.
@@ -238,10 +239,24 @@ class AppState extends ChangeNotifier {
         extra: extra,
       ),
       station: 'bar',
+      variantId: variant?.id,
+      toppingIds: toppings.map((t) => t.id).toList(),
     ));
     _save();
     notifyListeners();
   }
+
+  /// Cart lines as API bill-item inputs (skips lines without a real variantId).
+  List<BillItemInput> cartAsBillItems() => [
+        for (final c in cart)
+          if (c.variantId != null)
+            BillItemInput(
+              variantId: c.variantId!,
+              quantity: c.qty,
+              toppingIds: c.toppingIds,
+              note: c.mods.note.isEmpty ? null : c.mods.note,
+            ),
+      ];
 
   void _addLine(Product p, ModSel o, int qty) {
     cart.add(CartLine(
@@ -293,6 +308,24 @@ class AppState extends ChangeNotifier {
   // ---- totals ----
   int get discountAmount => disc ? (cartSubtotal * 0.2).round() : 0;
   int get cartTotal => cartSubtotal - discountAmount;
+
+  // ---- real checkout (API) ----
+  bool checkoutBusy = false;
+  void setCheckoutBusy(bool v) {
+    checkoutBusy = v;
+    notifyListeners();
+  }
+
+  /// Clear the cart after a real bill was created + paid via the API.
+  void clearAfterCheckout() {
+    cart.clear();
+    disc = false;
+    table = null;
+    otype = 'takeaway';
+    checkoutBusy = false;
+    _save();
+    notifyListeners();
+  }
 
   // ---- payment ----
   void openPay(int total) {

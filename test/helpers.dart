@@ -4,8 +4,31 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:tiny_pos_mobile/main.dart';
 import 'package:tiny_pos_mobile/state/session.dart';
 import 'package:tiny_pos_mobile/state/menu_controller.dart';
+import 'package:tiny_pos_mobile/api/bill_repository.dart';
 import 'package:tiny_pos_mobile/models/auth_user.dart';
 import 'package:tiny_pos_mobile/models/menu.dart';
+import 'package:tiny_pos_mobile/models/bill.dart';
+
+/// A BillRepository that returns canned bills (no network) for widget tests.
+class FakeBillRepository extends BillRepository {
+  FakeBillRepository(super.api);
+  Bill _bill(String status) => Bill(
+        id: 'b-test', billCode: 'B-TEST-001', status: status, serviceType: 'TAKE_AWAY',
+        subtotal: 29000, discountTotal: 0, grandTotal: 29000,
+        paidTotal: status == 'PAID' ? 29000 : 0, note: null, paidAt: null, items: const [],
+      );
+  @override
+  Future<Bill> createBill({
+    required String serviceType,
+    List<BillItemInput> items = const [],
+    String? tableSessionId,
+    String? customerId,
+    String? note,
+    String? idempotencyKey,
+  }) async => _bill('DRAFT');
+  @override
+  Future<Bill> payCash(String billId, {required int received, int? amount}) async => _bill('PAID');
+}
 
 /// A fake authenticated user so widget tests bypass the real network login.
 AuthUser fakeUser(String staffRole) => AuthUser(
@@ -64,7 +87,8 @@ Future<void> pumpSignedIn(
   // end and the KDS 1s timer is cancelled — no "pending timer" assertion).
   final session = SessionState()..debugSignIn(fakeUser(staffRole));
   final menu = PosMenuController(session.api)..debugSetMenu(fakeMenu());
-  await t.pumpWidget(TinyPosApp(session: session, menu: menu));
+  final billRepo = FakeBillRepository(session.api);
+  await t.pumpWidget(TinyPosApp(session: session, menu: menu, billRepo: billRepo));
   await t.pump();
   await t.pump(const Duration(milliseconds: 450));
 }

@@ -4,6 +4,15 @@ Phát hành test qua **Firebase App Distribution** (group `testers`). Mỗi bả
 tăng `version` trong `pubspec.yaml` → push `main` → GitHub Actions tự build APK/AAB,
 chạy `flutter test`, và phát hành cho tester.
 
+## v0.2.2 — Thanh toán tiền mặt tạo hoá đơn thật
+- Nút "Hoàn tất" (tiền mặt) gọi backend dùng chung: **tạo bill + thu tiền mặt** thật
+  (`POST /pos/bills` → `POST .../payments/cash`), hiện mã hoá đơn thật + loading + lỗi.
+  Phương thức khác tạm giữ luồng cục bộ (chờ lớp QR/thẻ).
+- `lib/api/bill_repository.dart` + `lib/models/bill.dart`; CartLine mang `variantId`/topping
+  để dựng `BillItemInput`. Verify: API (probe bill 201 + PAID), UI (test fake-repo), kết nối local.
+- ⚠️ CHƯA phát hành cho tester (bản Firebase trỏ production → tránh tạo bill thật trên branch
+  khách trong giai đoạn test). Chỉ verify trên backend cục bộ.
+
 ## v0.2.1 — Thực đơn thật (thu ngân)
 - Màn Bán hàng nạp **thực đơn thật** từ `GET /pos/menu` (cùng dữ liệu với web): nhóm,
   sản phẩm, **ảnh thật**, giá, tồn kho (Hết hàng), tìm kiếm. Có loading / lỗi + thử lại.

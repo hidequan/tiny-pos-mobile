@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../../state/session.dart';
+import '../../api/bill_repository.dart';
+import '../../api/api_client.dart';
 import '../../data/models.dart';
 import '../../data/seed.dart';
 import '../../theme/palette.dart';
@@ -405,11 +407,11 @@ class _PaySheet extends StatelessWidget {
             ],
           ),
           footer: AppButton(
-            'Hoàn tất đơn hàng',
+            state.checkoutBusy ? 'Đang xử lý...' : 'Hoàn tất đơn hàng',
             icon: 'check',
             large: true,
             block: true,
-            enabled: !(state.payMethod == 'cash' && state.received < t),
+            enabled: !state.checkoutBusy && !(state.payMethod == 'cash' && state.received < t),
             onTap: () => _complete(context, state),
           ),
         );
@@ -456,6 +458,12 @@ class _PaySheet extends StatelessWidget {
   }
 
   void _complete(BuildContext context, AppState state) {
+    // Cash goes through the REAL shared backend (create bill + pay). Other
+    // methods keep the local flow until their payment endpoints are wired.
+    if (state.payMethod == 'cash') {
+      _completeCash(context, state);
+      return;
+    }
     final tot = state.cartTotal;
     final method = state.payMethod;
     final received = state.received;
@@ -463,13 +471,42 @@ class _PaySheet extends StatelessWidget {
     final table = state.table;
     final code = state.completeOrder();
     context.shell.showSheet((_) => _SuccessSheet(
-          code: code,
-          total: tot,
-          method: method,
-          received: received,
-          otype: otype,
-          table: table,
-        ));
+          code: code, total: tot, method: method, received: received, otype: otype, table: table));
+  }
+
+  Future<void> _completeCash(BuildContext context, AppState state) async {
+    final repo = context.read<BillRepository>();
+    final received = state.received;
+    final items = state.cartAsBillItems();
+    if (items.isEmpty) {
+      context.shell.toast('Không tạo được hoá đơn (món thiếu mã)', 'edit');
+      return;
+    }
+    state.setCheckoutBusy(true);
+    try {
+      // Dine-in needs a real table session (wired in the tables layer); for now
+      // the cash checkout creates a TAKE_AWAY bill on the shared backend.
+      final bill = await repo.createBill(serviceType: 'TAKE_AWAY', items: items);
+      final paid = await repo.payCash(bill.id, received: received);
+      if (!context.mounted) return;
+      state.clearAfterCheckout();
+      context.shell.showSheet((_) => _SuccessSheet(
+            code: paid.billCode,
+            total: paid.grandTotal,
+            method: 'cash',
+            received: received,
+            otype: 'takeaway',
+            table: null,
+          ));
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      state.setCheckoutBusy(false);
+      context.shell.toast(e.message, 'edit');
+    } catch (_) {
+      if (!context.mounted) return;
+      state.setCheckoutBusy(false);
+      context.shell.toast('Lỗi tạo hoá đơn. Thử lại.', 'edit');
+    }
   }
 }
 
