@@ -93,6 +93,21 @@ class Bill {
   bool get isDineIn => serviceType == 'DINE_IN';
 }
 
+/// Result of creating a dynamic QR payment (POST .../payments/qr).
+class QrPayment {
+  final String paymentId;
+  final String referenceCode;
+  final String qrPayload;
+  final int amount;
+  QrPayment({required this.paymentId, required this.referenceCode, required this.qrPayload, required this.amount});
+  factory QrPayment.fromJson(Map j) => QrPayment(
+        paymentId: (j['paymentId'] ?? '') as String,
+        referenceCode: (j['referenceCode'] ?? '') as String,
+        qrPayload: (j['qrPayload'] ?? '') as String,
+        amount: BillItem._int(j['amount']),
+      );
+}
+
 /// One line to POST when creating/adding to a bill (matches BillItemInput).
 class BillItemInput {
   final String variantId;

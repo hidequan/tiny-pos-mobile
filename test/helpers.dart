@@ -152,6 +152,11 @@ class FakeBillRepository extends BillRepository {
   }) async => _bill('DRAFT');
   @override
   Future<Bill> payCash(String billId, {required int received, int? amount}) async => _bill('PAID');
+  @override
+  Future<QrPayment> createQr(String billId, {int? amount}) async =>
+      QrPayment(paymentId: 'pay-test', referenceCode: 'QRP-TEST-001', qrPayload: '{"ref":"test"}', amount: 29000);
+  @override
+  Future<Bill> confirmPayment(String paymentId, {int? amount, String? referenceCode}) async => _bill('PAID');
 }
 
 /// A fake authenticated user so widget tests bypass the real network login.

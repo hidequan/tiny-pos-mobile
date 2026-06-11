@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../state/app_state.dart';
 import '../../state/session.dart';
 import '../../state/tables_controller.dart';
 import '../../api/bill_repository.dart';
 import '../../api/api_client.dart';
+import '../../models/bill.dart';
 import '../../data/models.dart';
 import '../../data/seed.dart';
 import '../../theme/palette.dart';
@@ -529,10 +531,14 @@ class _PaySheet extends StatelessWidget {
   }
 
   void _complete(BuildContext context, AppState state) {
-    // Cash goes through the REAL shared backend (create bill + pay). Other
-    // methods keep the local flow until their payment endpoints are wired.
+    // Cash + QR go through the REAL shared backend. Card/MoMo keep the local
+    // flow until their gateway endpoints are wired.
     if (state.payMethod == 'cash') {
       _completeCash(context, state);
+      return;
+    }
+    if (state.payMethod == 'qr') {
+      _completeQr(context, state);
       return;
     }
     final tot = state.cartTotal;
@@ -577,6 +583,125 @@ class _PaySheet extends StatelessWidget {
       if (!context.mounted) return;
       state.setCheckoutBusy(false);
       context.shell.toast('Lỗi tạo hoá đơn. Thử lại.', 'edit');
+    }
+  }
+
+  Future<void> _completeQr(BuildContext context, AppState state) async {
+    final repo = context.read<BillRepository>();
+    final items = state.cartAsBillItems();
+    if (items.isEmpty) {
+      context.shell.toast('Không tạo được hoá đơn (món thiếu mã)', 'edit');
+      return;
+    }
+    state.setCheckoutBusy(true);
+    try {
+      final bill = await repo.createBill(serviceType: 'TAKE_AWAY', items: items);
+      final qr = await repo.createQr(bill.id);
+      if (!context.mounted) return;
+      state.setCheckoutBusy(false);
+      context.shell.showSheet((_) => _QrPaySheet(qr: qr, billCode: bill.billCode));
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      state.setCheckoutBusy(false);
+      context.shell.toast(e.message, 'edit');
+    } catch (_) {
+      if (!context.mounted) return;
+      state.setCheckoutBusy(false);
+      context.shell.toast('Lỗi tạo mã QR. Thử lại.', 'edit');
+    }
+  }
+}
+
+/// Real dynamic-QR sheet: shows the VietQR payload + reference, then confirms
+/// the transfer manually (cashier saw the money land) via the shared backend.
+class _QrPaySheet extends StatefulWidget {
+  final QrPayment qr;
+  final String billCode;
+  const _QrPaySheet({required this.qr, required this.billCode});
+  @override
+  State<_QrPaySheet> createState() => _QrPaySheetState();
+}
+
+class _QrPaySheetState extends State<_QrPaySheet> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final qr = widget.qr;
+    return AppSheet(
+      title: 'Chuyển khoản / QR',
+      headerExtra: [AppBadge('Chờ thu', color: BadgeColor.amber)],
+      body: Column(children: [
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: p.line),
+          ),
+          child: SizedBox(
+            width: 190,
+            height: 190,
+            child: QrImageView(
+              data: qr.qrPayload.isNotEmpty ? qr.qrPayload : qr.referenceCode,
+              version: QrVersions.auto,
+              backgroundColor: Colors.white,
+              padding: EdgeInsets.zero,
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(vnd(qr.amount), style: AppType.display(size: 30, color: p.terracotta)),
+        const SizedBox(height: 4),
+        Text('Khách quét mã VietQR để chuyển khoản',
+            style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.muted)),
+        const SizedBox(height: 12),
+        CardBox(
+          radius: 14,
+          padding: const EdgeInsets.all(14),
+          child: Column(children: [
+            KvRow('Mã đơn', Text(widget.billCode, style: AppType.body(size: 14, weight: FontWeight.w800, color: p.ink))),
+            KvRow('Nội dung CK', Text(qr.referenceCode, style: AppType.body(size: 14, weight: FontWeight.w800, color: p.ink)), last: true),
+          ]),
+        ),
+      ]),
+      footer: AppButton(
+        _busy ? 'Đang xác nhận...' : 'Khách đã chuyển khoản',
+        icon: 'check',
+        large: true,
+        block: true,
+        enabled: !_busy,
+        onTap: () => _confirm(context),
+      ),
+    );
+  }
+
+  Future<void> _confirm(BuildContext context) async {
+    setState(() => _busy = true);
+    final repo = context.read<BillRepository>();
+    final state = context.read<AppState>();
+    try {
+      final paid = await repo.confirmPayment(widget.qr.paymentId);
+      if (!context.mounted) return;
+      state.clearAfterCheckout();
+      context.shell.showSheet((_) => _SuccessSheet(
+            code: paid.billCode,
+            total: paid.grandTotal,
+            method: 'qr',
+            received: 0,
+            otype: 'takeaway',
+            table: null,
+          ));
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      setState(() => _busy = false);
+      context.shell.toast(e.message, 'edit');
+    } catch (_) {
+      if (!context.mounted) return;
+      setState(() => _busy = false);
+      context.shell.toast('Chưa xác nhận được. Thử lại.', 'edit');
     }
   }
 }

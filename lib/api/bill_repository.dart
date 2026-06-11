@@ -46,8 +46,21 @@ class BillRepository {
   }
 
   /// Create a dynamic QR (mock gateway) — POST /pos/bills/{id}/payments/qr.
-  Future<dynamic> payQr(String billId) =>
-      api.post('/pos/bills/$billId/payments/qr', body: {'idempotencyKey': _key()});
+  /// Returns the pending QR (paymentId + payload + amount); not yet collected.
+  Future<QrPayment> createQr(String billId, {int? amount}) async {
+    final data = await api.post('/pos/bills/$billId/payments/qr', body: {'amount': ?amount});
+    return QrPayment.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  /// Confirm a QR/transfer payment manually (cashier saw the money land) —
+  /// POST /pos/payments/{paymentId}/manual-confirm. Returns the paid bill.
+  Future<Bill> confirmPayment(String paymentId, {int? amount, String? referenceCode}) async {
+    final data = await api.post('/pos/payments/$paymentId/manual-confirm', body: {
+      'amount': ?amount,
+      'referenceCode': ?referenceCode,
+    });
+    return _billFrom(data);
+  }
 
   Future<List<Bill>> listBills() async {
     final data = await api.get('/pos/bills');
