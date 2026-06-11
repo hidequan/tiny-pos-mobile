@@ -62,6 +62,19 @@ class BillRepository {
     return _billFrom(data);
   }
 
+  /// Apply a voucher code to a bill (server recomputes the discount) —
+  /// POST /pos/bills/{id}/apply-voucher. Returns the updated bill.
+  Future<Bill> applyVoucher(String billId, String code) async {
+    final data = await api.post('/pos/bills/$billId/apply-voucher', body: {'code': code});
+    return _billFrom(data);
+  }
+
+  /// Remove the applied voucher — DELETE /pos/bills/{id}/voucher.
+  Future<Bill> removeVoucher(String billId) async {
+    final data = await api.delete('/pos/bills/$billId/voucher');
+    return _billFrom(data);
+  }
+
   Future<List<Bill>> listBills() async {
     final data = await api.get('/pos/bills');
     final list = data is List ? data : ((data as Map)['items'] ?? (data)['data'] ?? []) as List;

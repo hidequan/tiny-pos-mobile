@@ -50,6 +50,8 @@ class AppState extends ChangeNotifier {
   int payTotal = 0;
   String payMethod = 'cash';
   int received = 0;
+  Bill? payBill; // the real server draft bill being paid (created when pay opens)
+  String? appliedVoucher; // voucher code applied to payBill, if any
 
   // ---- kds ----
   String kdsTab = 'queue';
@@ -323,6 +325,8 @@ class AppState extends ChangeNotifier {
     table = null;
     otype = 'takeaway';
     checkoutBusy = false;
+    payBill = null;
+    appliedVoucher = null;
     _save();
     notifyListeners();
   }
@@ -332,6 +336,17 @@ class AppState extends ChangeNotifier {
     payTotal = total;
     payMethod = 'cash';
     received = 0;
+    payBill = null;
+    appliedVoucher = null;
+    notifyListeners();
+  }
+
+  /// Bind the real server bill (created at pay-open) so the pay sheet shows the
+  /// server-computed total + any voucher discount.
+  void setPayBill(Bill b, {String? voucher}) {
+    payBill = b;
+    appliedVoucher = voucher;
+    payTotal = b.grandTotal;
     notifyListeners();
   }
 

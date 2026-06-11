@@ -181,8 +181,7 @@ class _CartSheet extends StatelessWidget {
       builder: (context, state, _) {
         final p = context.palette;
         final sub = state.cartSubtotal;
-        final disc = state.discountAmount;
-        final tot = state.cartTotal;
+        final tot = state.cartSubtotal;
         final tables = context.watch<TablesController>();
         final dineIn = tables.hasActiveSession;
 
@@ -256,30 +255,13 @@ class _CartSheet extends StatelessWidget {
               const SizedBox(height: 8),
               for (final c in state.cart) _cartLine(context, state, c, p),
               const SizedBox(height: 14),
-              Pressable(
-                scale: 0.99,
-                onTap: state.toggleDisc,
-                child: CardBox(
-                  radius: 14,
-                  padding: const EdgeInsets.all(13),
-                  child: Row(children: [
-                    LeadIcon(icon: 'tag'),
-                    const SizedBox(width: 13),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                        Text('Khuyến mãi', style: AppType.body(size: 14.5, weight: FontWeight.w700, color: p.ink)),
-                        const SizedBox(height: 2),
-                        Text(state.disc ? 'Giờ vàng −20%' : 'Chạm để áp dụng',
-                            style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
-                      ]),
-                    ),
-                    SwitchDot(on: state.disc, onTap: state.toggleDisc),
-                  ]),
+              if (!dineIn)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text('Mã giảm giá áp dụng ở bước thanh toán.',
+                      style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.muted)),
                 ),
-              ),
-              const SizedBox(height: 14),
               _totRow(context, 'Tạm tính', vnd(sub)),
-              if (disc > 0) _totRow(context, 'Giảm giá (Giờ vàng)', '−${vnd(disc)}', color: p.greenD),
               _totRowBig(context, 'Tổng cộng', vnd(tot)),
             ],
           ),
@@ -293,10 +275,11 @@ class _CartSheet extends StatelessWidget {
                   onTap: () => _sendToTable(context, state, tables),
                 )
               : AppButton(
-                  'Thanh toán · ${vnd(tot)}',
+                  state.checkoutBusy ? 'Đang mở...' : 'Thanh toán · ${vnd(tot)}',
                   icon: 'card',
                   large: true,
                   block: true,
+                  enabled: !state.checkoutBusy,
                   onTap: () => openPay(context, tot),
                 ),
         );
@@ -391,21 +374,58 @@ class _CartSheet extends StatelessWidget {
   }
 }
 
-/// Payment sheet (method picker + cash received / QR mock).
-void openPay(BuildContext context, int total) {
+/// Open payment: create the real DRAFT bill first (so vouchers can apply and
+/// the sheet shows the server total), then show the pay sheet.
+Future<void> openPay(BuildContext context, int total) async {
   final state = context.read<AppState>();
+  final repo = context.read<BillRepository>();
+  final items = state.cartAsBillItems();
+  if (items.isEmpty) {
+    context.shell.toast('Không tạo được hoá đơn (món thiếu mã)', 'edit');
+    return;
+  }
   state.openPay(total);
-  context.shell.showSheet((_) => const _PaySheet());
+  state.setCheckoutBusy(true);
+  try {
+    final bill = await repo.createBill(serviceType: 'TAKE_AWAY', items: items);
+    if (!context.mounted) return;
+    state.setCheckoutBusy(false);
+    state.setPayBill(bill);
+    context.shell.showSheet((_) => const _PaySheet());
+  } on ApiException catch (e) {
+    if (!context.mounted) return;
+    state.setCheckoutBusy(false);
+    context.shell.toast(e.message, 'edit');
+  } catch (_) {
+    if (!context.mounted) return;
+    state.setCheckoutBusy(false);
+    context.shell.toast('Lỗi mở thanh toán. Thử lại.', 'edit');
+  }
 }
 
-class _PaySheet extends StatelessWidget {
+class _PaySheet extends StatefulWidget {
   const _PaySheet();
+  @override
+  State<_PaySheet> createState() => _PaySheetState();
+}
+
+class _PaySheetState extends State<_PaySheet> {
+  final TextEditingController _voucher = TextEditingController();
+  bool _voucherBusy = false;
+
+  @override
+  void dispose() {
+    _voucher.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, _) {
         final p = context.palette;
-        final t = state.payTotal;
+        final t = state.payBill?.grandTotal ?? state.payTotal;
+        final discount = state.payBill?.discountTotal ?? 0;
         final methods = [
           ['cash', 'Tiền mặt', 'cash'],
           ['qr', 'Chuyển khoản / QR', 'qr'],
@@ -422,13 +442,18 @@ class _PaySheet extends StatelessWidget {
             children: [
               Center(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 6, 0, 14),
+                  padding: const EdgeInsets.fromLTRB(0, 6, 0, 12),
                   child: Column(children: [
                     Text('Tổng cần thu', style: AppType.body(size: 13, weight: FontWeight.w700, color: p.muted)),
                     Text(vnd(t), style: AppType.display(size: 38, color: p.terracotta)),
+                    if (discount > 0)
+                      Text('Đã giảm ${vnd(discount)}${state.appliedVoucher != null ? ' · ${state.appliedVoucher}' : ''}',
+                          style: AppType.body(size: 12.5, weight: FontWeight.w700, color: p.greenD)),
                   ]),
                 ),
               ),
+              _voucherSection(context, state),
+              const SizedBox(height: 14),
               Text('Phương thức', style: AppType.body(size: 13, weight: FontWeight.w800, color: p.ink2)),
               const SizedBox(height: 7),
               for (final m in methods) ...[
@@ -490,6 +515,92 @@ class _PaySheet extends StatelessWidget {
         );
       },
     );
+  }
+
+  Widget _voucherSection(BuildContext context, AppState state) {
+    final p = context.palette;
+    if (state.appliedVoucher != null) {
+      return CardBox(
+        radius: 14,
+        color: p.greenBg,
+        borderColor: Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+        child: Row(children: [
+          const Text('🎟️', style: TextStyle(fontSize: 18)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text('Đã áp mã ${state.appliedVoucher}',
+                style: AppType.body(size: 14, weight: FontWeight.w800, color: p.greenD)),
+          ),
+          GestureDetector(
+            onTap: _voucherBusy ? null : () => _removeVoucher(context, state),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(color: p.paper, borderRadius: BorderRadius.circular(9)),
+              child: Text(_voucherBusy ? '...' : 'Gỡ', style: AppType.body(size: 13, weight: FontWeight.w800, color: p.ink2)),
+            ),
+          ),
+        ]),
+      );
+    }
+    return Row(children: [
+      Expanded(
+        child: TextField(
+          controller: _voucher,
+          textCapitalization: TextCapitalization.characters,
+          style: AppType.body(size: 14.5, weight: FontWeight.w700, color: p.ink),
+          decoration: InputDecoration(
+            hintText: 'Mã giảm giá',
+            hintStyle: AppType.body(size: 14.5, weight: FontWeight.w500, color: p.faint),
+            filled: true,
+            fillColor: p.paper,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: p.line2, width: 1.5)),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: p.caramel, width: 1.5)),
+          ),
+        ),
+      ),
+      const SizedBox(width: 8),
+      AppButton(_voucherBusy ? '...' : 'Áp dụng', variant: BtnVariant.dark,
+          onTap: _voucherBusy ? null : () => _applyVoucher(context, state)),
+    ]);
+  }
+
+  Future<void> _applyVoucher(BuildContext context, AppState state) async {
+    final code = _voucher.text.trim().toUpperCase();
+    final bill = state.payBill;
+    if (code.isEmpty || bill == null) return;
+    setState(() => _voucherBusy = true);
+    final repo = context.read<BillRepository>();
+    try {
+      final updated = await repo.applyVoucher(bill.id, code);
+      if (!context.mounted) return;
+      state.setPayBill(updated, voucher: code);
+      _voucher.clear();
+      context.shell.toast('Đã áp mã $code', 'tag');
+    } on ApiException catch (e) {
+      if (context.mounted) context.shell.toast(e.message, 'edit');
+    } catch (_) {
+      if (context.mounted) context.shell.toast('Mã không hợp lệ', 'edit');
+    }
+    if (mounted) setState(() => _voucherBusy = false);
+  }
+
+  Future<void> _removeVoucher(BuildContext context, AppState state) async {
+    final bill = state.payBill;
+    if (bill == null) return;
+    setState(() => _voucherBusy = true);
+    final repo = context.read<BillRepository>();
+    try {
+      final updated = await repo.removeVoucher(bill.id);
+      if (!context.mounted) return;
+      state.setPayBill(updated, voucher: null);
+    } on ApiException catch (e) {
+      if (context.mounted) context.shell.toast(e.message, 'edit');
+    } catch (_) {/* ignore */}
+    if (mounted) setState(() => _voucherBusy = false);
   }
 
   Widget _payMethod(BuildContext context, AppState state, String key, String label, String icon) {
@@ -554,16 +665,13 @@ class _PaySheet extends StatelessWidget {
   Future<void> _completeCash(BuildContext context, AppState state) async {
     final repo = context.read<BillRepository>();
     final received = state.received;
-    final items = state.cartAsBillItems();
-    if (items.isEmpty) {
-      context.shell.toast('Không tạo được hoá đơn (món thiếu mã)', 'edit');
+    final bill = state.payBill;
+    if (bill == null) {
+      context.shell.toast('Chưa có hoá đơn. Thử lại.', 'edit');
       return;
     }
     state.setCheckoutBusy(true);
     try {
-      // Dine-in needs a real table session (wired in the tables layer); for now
-      // the cash checkout creates a TAKE_AWAY bill on the shared backend.
-      final bill = await repo.createBill(serviceType: 'TAKE_AWAY', items: items);
       final paid = await repo.payCash(bill.id, received: received);
       if (!context.mounted) return;
       state.clearAfterCheckout();
@@ -582,20 +690,19 @@ class _PaySheet extends StatelessWidget {
     } catch (_) {
       if (!context.mounted) return;
       state.setCheckoutBusy(false);
-      context.shell.toast('Lỗi tạo hoá đơn. Thử lại.', 'edit');
+      context.shell.toast('Lỗi thanh toán. Thử lại.', 'edit');
     }
   }
 
   Future<void> _completeQr(BuildContext context, AppState state) async {
     final repo = context.read<BillRepository>();
-    final items = state.cartAsBillItems();
-    if (items.isEmpty) {
-      context.shell.toast('Không tạo được hoá đơn (món thiếu mã)', 'edit');
+    final bill = state.payBill;
+    if (bill == null) {
+      context.shell.toast('Chưa có hoá đơn. Thử lại.', 'edit');
       return;
     }
     state.setCheckoutBusy(true);
     try {
-      final bill = await repo.createBill(serviceType: 'TAKE_AWAY', items: items);
       final qr = await repo.createQr(bill.id);
       if (!context.mounted) return;
       state.setCheckoutBusy(false);
