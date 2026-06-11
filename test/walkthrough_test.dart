@@ -63,8 +63,11 @@ void main() {
     noCrash(t, 'orders tab');
     await tap(t, txt('Sơ đồ bàn'));
     noCrash(t, 'tables tab');
-    await tap(t, txt('A1'));
-    noCrash(t, 'table detail sheet');
+    await tap(t, txt('A01')); // empty table -> open-table sheet
+    noCrash(t, 'open-table sheet');
+    await tap(t, find.byIcon(Icons.close_rounded));
+    await tap(t, txt('A02')); // occupied -> session detail sheet
+    noCrash(t, 'session detail sheet');
     await tap(t, find.byIcon(Icons.close_rounded));
     await tap(t, txt('Ca làm'));
     noCrash(t, 'shift tab');

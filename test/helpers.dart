@@ -6,12 +6,15 @@ import 'package:tiny_pos_mobile/state/session.dart';
 import 'package:tiny_pos_mobile/state/menu_controller.dart';
 import 'package:tiny_pos_mobile/api/bill_repository.dart';
 import 'package:tiny_pos_mobile/api/kds_repository.dart';
+import 'package:tiny_pos_mobile/api/table_repository.dart';
 import 'package:tiny_pos_mobile/state/bills_controller.dart';
 import 'package:tiny_pos_mobile/state/kds_controller.dart';
+import 'package:tiny_pos_mobile/state/tables_controller.dart';
 import 'package:tiny_pos_mobile/models/auth_user.dart';
 import 'package:tiny_pos_mobile/models/menu.dart';
 import 'package:tiny_pos_mobile/models/bill.dart';
 import 'package:tiny_pos_mobile/models/kds.dart';
+import 'package:tiny_pos_mobile/models/table.dart';
 
 /// A no-op KdsRepository returning canned tickets for widget tests.
 class FakeKdsRepository extends KdsRepository {
@@ -35,6 +38,46 @@ List<KdsTicket> _fakeTickets() => [
           KdsTicketItem(id: 'i2', status: 'READY', productName: 'Bạc xỉu', variantName: null, quantity: 1, mods: ''),
         ],
       ),
+    ];
+
+/// A no-op TableRepository with a canned floor map for widget tests.
+class FakeTableRepository extends TableRepository {
+  FakeTableRepository(super.api);
+  @override
+  Future<List<TableArea>> map() async => _fakeAreas();
+  @override
+  Future<TableSessionDetail> sessionDetail(String sessionId) async => TableSessionDetail(
+        id: sessionId, status: 'WAITING', guestCount: 2, tableId: 'tA02', tableCode: 'A02',
+        bills: [
+          Bill(
+            id: 'tb1', billCode: 'B260611-D01', status: 'SENT_TO_BAR_UNPAID', serviceType: 'DINE_IN',
+            subtotal: 58000, discountTotal: 0, grandTotal: 58000, paidTotal: 0, note: null, paidAt: null,
+            items: [
+              BillItem(id: 'ti1', variantId: 'v1', productName: 'Cà phê sữa đá', variantName: null,
+                  sizeName: 'M', unitPrice: 29000, quantity: 2, lineTotal: 58000, note: null, status: 'WAITING'),
+            ],
+          ),
+        ],
+      );
+  @override
+  Future<String> openTable(String tableId, {int guestCount = 1}) async => 'sess-new';
+  @override
+  Future<void> addItems(String sessionId, List<BillItemInput> items, {String? billId}) async {}
+  @override
+  Future<void> close(String sessionId) async {}
+  @override
+  Future<void> clean(String tableId) async {}
+}
+
+List<TableArea> _fakeAreas() => [
+      TableArea(id: 'area1', name: 'Tầng 1', level: 1, tables: [
+        CafeTable(id: 'tA01', code: 'A01', name: null, seats: 4, status: 'EMPTY', posX: 0, posY: 0, session: null),
+        CafeTable(
+          id: 'tA02', code: 'A02', name: null, seats: 4, status: 'OCCUPIED', posX: 0, posY: 0,
+          session: TableSessionSummary(id: 'sess-A02', status: 'WAITING', guestCount: 2, billCount: 1, total: 58000),
+        ),
+        CafeTable(id: 'tA03', code: 'A03', name: null, seats: 2, status: 'DIRTY', posX: 0, posY: 0, session: null),
+      ]),
     ];
 
 /// A BillRepository that returns canned bills (no network) for widget tests.
@@ -125,7 +168,8 @@ Future<void> pumpSignedIn(
       ),
     ]);
   final kds = KdsController(FakeKdsRepository(session.api))..debugSetData(_fakeTickets(), KdsStats(1, 1, 3));
-  await t.pumpWidget(TinyPosApp(session: session, menu: menu, billRepo: billRepo, bills: bills, kds: kds));
+  final tables = TablesController(FakeTableRepository(session.api))..debugSetAreas(_fakeAreas());
+  await t.pumpWidget(TinyPosApp(session: session, menu: menu, billRepo: billRepo, bills: bills, kds: kds, tables: tables));
   await t.pump();
   await t.pump(const Duration(milliseconds: 450));
 }

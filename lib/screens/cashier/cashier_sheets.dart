@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../../state/session.dart';
+import '../../state/tables_controller.dart';
 import '../../api/bill_repository.dart';
 import '../../api/api_client.dart';
 import '../../data/models.dart';
@@ -180,6 +181,8 @@ class _CartSheet extends StatelessWidget {
         final sub = state.cartSubtotal;
         final disc = state.discountAmount;
         final tot = state.cartTotal;
+        final tables = context.watch<TablesController>();
+        final dineIn = tables.hasActiveSession;
 
         if (state.cart.isEmpty) {
           // Auto-close when emptied.
@@ -187,7 +190,7 @@ class _CartSheet extends StatelessWidget {
         }
 
         return AppSheet(
-          title: 'Đơn hàng hiện tại',
+          title: dineIn ? 'Gọi món · Bàn ${tables.activeTableLabel}' : 'Đơn hàng hiện tại',
           headerExtra: [
             GestureDetector(
               onTap: () {
@@ -204,20 +207,50 @@ class _CartSheet extends StatelessWidget {
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Segmented(
-                labels: ['Mang đi', 'Tại bàn${state.table != null ? ' · ${state.table}' : ''}'],
-                icons: const ['coffee', 'table'],
-                active: state.otype == 'takeaway' ? 0 : 1,
-                onTap: (i) {
-                  if (i == 1 && state.table == null) {
-                    context.shell.closeSheet();
-                    state.setCashTab('tables');
-                    context.shell.toast('Chọn bàn cho đơn tại chỗ', 'table');
-                  } else {
-                    state.setOtype(i == 0 ? 'takeaway' : 'dinein');
-                  }
-                },
-              ),
+              if (dineIn) ...[
+                CardBox(
+                  radius: 14,
+                  padding: const EdgeInsets.all(13),
+                  child: Row(children: [
+                    LeadIcon(icon: 'table'),
+                    const SizedBox(width: 13),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                        Text('Phục vụ tại Bàn ${tables.activeTableLabel}',
+                            style: AppType.body(size: 14.5, weight: FontWeight.w700, color: p.ink)),
+                        const SizedBox(height: 2),
+                        Text('Món sẽ được gửi thẳng xuống Bar',
+                            style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
+                      ]),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        tables.clearActive();
+                        context.shell.toast('Đã rời bàn — chuyển sang mang đi', 'coffee');
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                        decoration: BoxDecoration(color: p.cream2, borderRadius: BorderRadius.circular(10)),
+                        child: Text('Rời', style: AppType.body(size: 13, weight: FontWeight.w800, color: p.ink2)),
+                      ),
+                    ),
+                  ]),
+                ),
+              ] else
+                Segmented(
+                  labels: ['Mang đi', 'Tại bàn${state.table != null ? ' · ${state.table}' : ''}'],
+                  icons: const ['coffee', 'table'],
+                  active: state.otype == 'takeaway' ? 0 : 1,
+                  onTap: (i) {
+                    if (i == 1) {
+                      context.shell.closeSheet();
+                      state.setCashTab('tables');
+                      context.shell.toast('Chọn bàn cho đơn tại chỗ', 'table');
+                    } else {
+                      state.setOtype('takeaway');
+                    }
+                  },
+                ),
               const SizedBox(height: 8),
               for (final c in state.cart) _cartLine(context, state, c, p),
               const SizedBox(height: 14),
@@ -248,16 +281,54 @@ class _CartSheet extends StatelessWidget {
               _totRowBig(context, 'Tổng cộng', vnd(tot)),
             ],
           ),
-          footer: AppButton(
-            'Thanh toán · ${vnd(tot)}',
-            icon: 'card',
-            large: true,
-            block: true,
-            onTap: () => openPay(context, tot),
-          ),
+          footer: dineIn
+              ? AppButton(
+                  state.checkoutBusy ? 'Đang gửi...' : 'Gửi món vào bàn · ${vnd(tot)}',
+                  icon: 'table',
+                  large: true,
+                  block: true,
+                  enabled: !state.checkoutBusy,
+                  onTap: () => _sendToTable(context, state, tables),
+                )
+              : AppButton(
+                  'Thanh toán · ${vnd(tot)}',
+                  icon: 'card',
+                  large: true,
+                  block: true,
+                  onTap: () => openPay(context, tot),
+                ),
         );
       },
     );
+  }
+
+  Future<void> _sendToTable(BuildContext context, AppState state, TablesController tables) async {
+    final sessionId = tables.activeSessionId;
+    if (sessionId == null) return;
+    final items = state.cartAsBillItems();
+    if (items.isEmpty) {
+      context.shell.toast('Không gửi được (món thiếu mã)', 'edit');
+      return;
+    }
+    final label = tables.activeTableLabel;
+    state.setCheckoutBusy(true);
+    try {
+      await tables.addItems(sessionId, items);
+      if (!context.mounted) return;
+      state.clearAfterCheckout();
+      tables.clearActive();
+      context.shell.closeSheet();
+      state.setCashTab('tables');
+      context.shell.toast('Đã gửi món vào Bàn $label', 'check');
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      state.setCheckoutBusy(false);
+      context.shell.toast(e.message, 'edit');
+    } catch (_) {
+      if (!context.mounted) return;
+      state.setCheckoutBusy(false);
+      context.shell.toast('Lỗi gửi món. Thử lại.', 'edit');
+    }
   }
 
   Widget _cartLine(BuildContext context, AppState state, CartLine c, Palette p) {
