@@ -167,6 +167,23 @@ class AdminDataController extends ChangeNotifier {
     }
   }
 
+  Future<String?> adjustStock({
+    required String branchId,
+    required String ingredientId,
+    required num quantity,
+    required String reason,
+  }) async {
+    try {
+      await repo.adjustStock(branchId: branchId, ingredientId: ingredientId, quantity: quantity, reason: reason);
+      await loadInventory();
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Không điều chỉnh được';
+    }
+  }
+
   void ensureStaff() {
     if (!staffLoaded && !staffLoading) loadStaff();
   }

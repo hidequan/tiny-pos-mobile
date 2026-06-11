@@ -170,60 +170,93 @@ class _AdminInvScreenState extends State<AdminInvScreen> {
   void _stockInSheet(BuildContext context, StockBalance item) {
     final qty = TextEditingController();
     bool busy = false;
+    bool adjust = false; // false = nhập thêm, true = điều chỉnh (set actual count)
     context.shell.showSheet((_) => StatefulBuilder(builder: (context, setInner) {
           final p = context.palette;
-          Future<void> submit() async {
-              final n = num.tryParse(qty.text.trim());
-              if (n == null || n <= 0) {
-                context.shell.toast('Nhập số lượng hợp lệ', 'edit');
-                return;
-              }
-              final branchId = context.read<SessionState>().user?.branchId;
-              if (branchId == null) {
-                context.shell.toast('Thiếu chi nhánh', 'edit');
-                return;
-              }
-              setInner(() => busy = true);
-              final err = await context.read<AdminDataController>()
-                  .stockIn(branchId: branchId, ingredientId: item.ingredientId, quantity: n, reason: 'Nhập kho (app)');
-              if (!context.mounted) return;
-              if (err == null) {
-                context.shell.closeSheet();
-                context.shell.toast('Đã nhập ${_fmt(n.toDouble())} ${item.unit} · ${item.name}', 'check');
-              } else {
-                setInner(() => busy = false);
-                context.shell.toast(err, 'edit');
-              }
-            }
+          final entered = num.tryParse(qty.text.trim());
+          final delta = (adjust && entered != null) ? entered - item.onHand : null;
 
-            return AppSheet(
-              title: 'Nhập kho · ${item.name}',
-              headerExtra: [AppBadge('Tồn ${_fmt(item.onHand)} ${item.unit}', color: BadgeColor.gray)],
-              body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const SizedBox(height: 4),
-                Text('Số lượng nhập thêm (${item.unit})', style: AppType.body(size: 13, weight: FontWeight.w800, color: p.ink2)),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: qty,
-                  keyboardType: TextInputType.number,
-                  autofocus: true,
-                  style: AppType.body(size: 16, weight: FontWeight.w700, color: p.ink),
-                  decoration: InputDecoration(
-                    hintText: 'VD: 500',
-                    hintStyle: AppType.body(size: 15, weight: FontWeight.w500, color: p.faint),
-                    filled: true,
-                    fillColor: p.paper,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                    enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: p.line2, width: 1.5)),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: p.caramel, width: 1.5)),
-                  ),
+          Future<void> submit() async {
+            final n = num.tryParse(qty.text.trim());
+            if (n == null || (!adjust && n <= 0) || (adjust && n < 0)) {
+              context.shell.toast('Nhập số lượng hợp lệ', 'edit');
+              return;
+            }
+            final branchId = context.read<SessionState>().user?.branchId;
+            if (branchId == null) {
+              context.shell.toast('Thiếu chi nhánh', 'edit');
+              return;
+            }
+            final ctl = context.read<AdminDataController>();
+            setInner(() => busy = true);
+            String? err;
+            if (adjust) {
+              final d = n - item.onHand;
+              if (d == 0) {
+                setInner(() => busy = false);
+                context.shell.toast('Số liệu không đổi', 'edit');
+                return;
+              }
+              err = await ctl.adjustStock(
+                  branchId: branchId, ingredientId: item.ingredientId, quantity: d, reason: 'Điều chỉnh kiểm kê (app)');
+            } else {
+              err = await ctl.stockIn(branchId: branchId, ingredientId: item.ingredientId, quantity: n, reason: 'Nhập kho (app)');
+            }
+            if (!context.mounted) return;
+            if (err == null) {
+              context.shell.closeSheet();
+              context.shell.toast(
+                  adjust ? 'Đã điều chỉnh ${item.name} → ${_fmt(n.toDouble())} ${item.unit}'
+                         : 'Đã nhập ${_fmt(n.toDouble())} ${item.unit} · ${item.name}',
+                  'check');
+            } else {
+              setInner(() => busy = false);
+              context.shell.toast(err, 'edit');
+            }
+          }
+
+          return AppSheet(
+            title: '${adjust ? 'Điều chỉnh' : 'Nhập kho'} · ${item.name}',
+            headerExtra: [AppBadge('Tồn ${_fmt(item.onHand)} ${item.unit}', color: BadgeColor.gray)],
+            body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const SizedBox(height: 4),
+              Segmented(
+                labels: const ['Nhập thêm', 'Điều chỉnh'],
+                active: adjust ? 1 : 0,
+                onTap: (i) => setInner(() => adjust = i == 1),
+              ),
+              const SizedBox(height: 14),
+              Text(adjust ? 'Số lượng thực tế đếm được (${item.unit})' : 'Số lượng nhập thêm (${item.unit})',
+                  style: AppType.body(size: 13, weight: FontWeight.w800, color: p.ink2)),
+              const SizedBox(height: 10),
+              TextField(
+                controller: qty,
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                onChanged: (_) => setInner(() {}),
+                style: AppType.body(size: 16, weight: FontWeight.w700, color: p.ink),
+                decoration: InputDecoration(
+                  hintText: adjust ? 'VD: ${_fmt(item.onHand)}' : 'VD: 500',
+                  hintStyle: AppType.body(size: 15, weight: FontWeight.w500, color: p.faint),
+                  filled: true,
+                  fillColor: p.paper,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                  enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: p.line2, width: 1.5)),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: p.caramel, width: 1.5)),
                 ),
-              ]),
-              footer: AppButton(busy ? 'Đang nhập...' : 'Xác nhận nhập kho',
-                  icon: 'check', large: true, block: true, enabled: !busy, onTap: submit),
-            );
+              ),
+              if (adjust && delta != null && delta != 0) ...[
+                const SizedBox(height: 10),
+                Text('Chênh lệch: ${delta > 0 ? '+' : ''}${_fmt(delta.toDouble())} ${item.unit}',
+                    style: AppType.body(size: 13.5, weight: FontWeight.w800, color: delta > 0 ? p.greenD : p.red)),
+              ],
+            ]),
+            footer: AppButton(
+                busy ? 'Đang lưu...' : (adjust ? 'Xác nhận điều chỉnh' : 'Xác nhận nhập kho'),
+                icon: 'check', large: true, block: true, enabled: !busy, onTap: submit),
+          );
         }));
   }
 

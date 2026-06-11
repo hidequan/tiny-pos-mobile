@@ -86,6 +86,22 @@ class AdminRepository {
         ],
       });
 
+  /// Adjustment: apply a signed delta to on-hand (correction) — POST
+  /// /admin/inventory/adjustments. [quantity] may be negative; [reason] required.
+  Future<void> adjustStock({
+    required String branchId,
+    required String ingredientId,
+    required num quantity,
+    required String reason,
+  }) =>
+      api.post('/admin/inventory/adjustments', body: {
+        'branchId': branchId,
+        'reason': reason,
+        'items': [
+          {'ingredientId': ingredientId, 'quantity': quantity},
+        ],
+      });
+
   /// Patch a product's editable fields (only non-null entries are sent).
   Future<void> updateProduct(
     String id, {

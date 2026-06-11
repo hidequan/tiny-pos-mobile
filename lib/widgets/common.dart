@@ -689,6 +689,7 @@ class Segmented extends StatelessWidget {
             Expanded(
               child: GestureDetector(
                 onTap: () => onTap(i),
+                behavior: HitTestBehavior.opaque,
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(

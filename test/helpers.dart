@@ -99,6 +99,8 @@ class FakeAdminRepository extends AdminRepository {
   Future<void> reactivateStaff(String id) async {}
   @override
   Future<void> stockIn({required String branchId, required String ingredientId, required num quantity, String? reason}) async {}
+  @override
+  Future<void> adjustStock({required String branchId, required String ingredientId, required num quantity, required String reason}) async {}
 }
 
 /// A no-op TableRepository with a canned floor map for widget tests.
