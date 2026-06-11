@@ -42,7 +42,8 @@ class StaffMember {
 
 /// GET /admin/inventory/balances — on-hand stock per ingredient.
 class StockBalance {
-  final String id;
+  final String id; // balance row id
+  final String ingredientId; // the ingredient FK (used for stock-in/adjust)
   final String code;
   final String name;
   final String unit;
@@ -51,6 +52,7 @@ class StockBalance {
   final double minStock;
   StockBalance({
     required this.id,
+    required this.ingredientId,
     required this.code,
     required this.name,
     required this.unit,
@@ -63,6 +65,7 @@ class StockBalance {
     final ing = (j['ingredient'] as Map?) ?? const {};
     return StockBalance(
       id: j['id'] as String,
+      ingredientId: (j['ingredientId'] ?? ing['id'] ?? j['id']) as String,
       code: (ing['code'] ?? j['code'] ?? '') as String,
       name: (ing['name'] ?? j['name'] ?? '') as String,
       unit: (ing['unit'] ?? j['unit'] ?? '') as String,

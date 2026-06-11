@@ -105,6 +105,68 @@ class AdminDataController extends ChangeNotifier {
     }
   }
 
+  // ---- staff + inventory writes (return error message, or null on success) --
+
+  Future<String?> createStaff({
+    required String username,
+    required String password,
+    required String fullName,
+    required String staffRole,
+    String? branchId,
+  }) async {
+    try {
+      await repo.createStaff(
+          username: username, password: password, fullName: fullName, staffRole: staffRole, branchId: branchId);
+      await loadStaff();
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Không tạo được nhân viên';
+    }
+  }
+
+  Future<String?> deactivateStaff(String id) async {
+    try {
+      await repo.deactivateStaff(id);
+      await loadStaff();
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Không khoá được tài khoản';
+    }
+  }
+
+  Future<String?> reactivateStaff(String id) async {
+    try {
+      await repo.reactivateStaff(id);
+      await loadStaff();
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Không mở khoá được tài khoản';
+    }
+  }
+
+  Future<String?> stockIn({
+    required String branchId,
+    required String ingredientId,
+    required num quantity,
+    String? reason,
+  }) async {
+    try {
+      await repo.stockIn(branchId: branchId, ingredientId: ingredientId, quantity: quantity, reason: reason);
+      await loadInventory();
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Không nhập kho được';
+    }
+  }
+
   void ensureStaff() {
     if (!staffLoaded && !staffLoading) loadStaff();
   }

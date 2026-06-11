@@ -3,10 +3,12 @@ import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../../state/admin_data_controller.dart';
+import '../../state/session.dart';
 import '../../models/admin.dart';
 import '../../theme/palette.dart';
 import '../../theme/typography.dart';
 import '../../widgets/common.dart';
+import '../../widgets/shell.dart';
 
 class AdminInvScreen extends StatefulWidget {
   const AdminInvScreen({super.key});
@@ -114,7 +116,10 @@ class _AdminInvScreenState extends State<AdminInvScreen> {
     final p = context.palette;
     final col = item.low ? p.red : (item.ratio < 0.4 ? p.amber : p.greenD);
     final barCol = item.low ? p.red : (item.ratio < 0.4 ? p.amber : p.green);
-    return Container(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _stockInSheet(context, item),
+      child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       decoration: BoxDecoration(
         color: p.paper,
@@ -158,7 +163,68 @@ class _AdminInvScreenState extends State<AdminInvScreen> {
             ),
           ),
       ]),
+    ),
     );
+  }
+
+  void _stockInSheet(BuildContext context, StockBalance item) {
+    final qty = TextEditingController();
+    bool busy = false;
+    context.shell.showSheet((_) => StatefulBuilder(builder: (context, setInner) {
+          final p = context.palette;
+          Future<void> submit() async {
+              final n = num.tryParse(qty.text.trim());
+              if (n == null || n <= 0) {
+                context.shell.toast('Nhập số lượng hợp lệ', 'edit');
+                return;
+              }
+              final branchId = context.read<SessionState>().user?.branchId;
+              if (branchId == null) {
+                context.shell.toast('Thiếu chi nhánh', 'edit');
+                return;
+              }
+              setInner(() => busy = true);
+              final err = await context.read<AdminDataController>()
+                  .stockIn(branchId: branchId, ingredientId: item.ingredientId, quantity: n, reason: 'Nhập kho (app)');
+              if (!context.mounted) return;
+              if (err == null) {
+                context.shell.closeSheet();
+                context.shell.toast('Đã nhập ${_fmt(n.toDouble())} ${item.unit} · ${item.name}', 'check');
+              } else {
+                setInner(() => busy = false);
+                context.shell.toast(err, 'edit');
+              }
+            }
+
+            return AppSheet(
+              title: 'Nhập kho · ${item.name}',
+              headerExtra: [AppBadge('Tồn ${_fmt(item.onHand)} ${item.unit}', color: BadgeColor.gray)],
+              body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const SizedBox(height: 4),
+                Text('Số lượng nhập thêm (${item.unit})', style: AppType.body(size: 13, weight: FontWeight.w800, color: p.ink2)),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: qty,
+                  keyboardType: TextInputType.number,
+                  autofocus: true,
+                  style: AppType.body(size: 16, weight: FontWeight.w700, color: p.ink),
+                  decoration: InputDecoration(
+                    hintText: 'VD: 500',
+                    hintStyle: AppType.body(size: 15, weight: FontWeight.w500, color: p.faint),
+                    filled: true,
+                    fillColor: p.paper,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: p.line2, width: 1.5)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: p.caramel, width: 1.5)),
+                  ),
+                ),
+              ]),
+              footer: AppButton(busy ? 'Đang nhập...' : 'Xác nhận nhập kho',
+                  icon: 'check', large: true, block: true, enabled: !busy, onTap: submit),
+            );
+        }));
   }
 
   String _fmt(double n) => n % 1 == 0 ? n.toInt().toString() : n.toStringAsFixed(1);

@@ -49,6 +49,43 @@ class AdminRepository {
         ],
       });
 
+  /// Create a staff account — POST /admin/users. MANAGER+ / staff.manage.
+  Future<void> createStaff({
+    required String username,
+    required String password,
+    required String fullName,
+    required String staffRole,
+    String? branchId,
+  }) =>
+      api.post('/admin/users', body: {
+        'username': username,
+        'password': password,
+        'fullName': fullName,
+        'staffRole': staffRole,
+        'branchId': ?branchId,
+      });
+
+  /// Lock (deactivate) a staff account — POST /admin/users/:id/deactivate.
+  Future<void> deactivateStaff(String id) => api.post('/admin/users/$id/deactivate');
+
+  /// Unlock a staff account — PATCH /admin/users/:id {status: ACTIVE}.
+  Future<void> reactivateStaff(String id) => api.patch('/admin/users/$id', body: {'status': 'ACTIVE'});
+
+  /// Stock-in: add quantity to an ingredient — POST /admin/inventory/stock-in.
+  Future<void> stockIn({
+    required String branchId,
+    required String ingredientId,
+    required num quantity,
+    String? reason,
+  }) =>
+      api.post('/admin/inventory/stock-in', body: {
+        'branchId': branchId,
+        'reason': ?reason,
+        'items': [
+          {'ingredientId': ingredientId, 'quantity': quantity},
+        ],
+      });
+
   /// Patch a product's editable fields (only non-null entries are sent).
   Future<void> updateProduct(
     String id, {

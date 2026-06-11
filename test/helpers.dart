@@ -76,8 +76,8 @@ class FakeAdminRepository extends AdminRepository {
       ];
   @override
   Future<List<StockBalance>> inventoryBalances() async => [
-        StockBalance(id: 'b1', code: 'CF-BEAN', name: 'Cà phê hạt', unit: 'g', onHand: 9906, reserved: 112, minStock: 500),
-        StockBalance(id: 'b2', code: 'MILK', name: 'Sữa tươi', unit: 'ml', onHand: 300, reserved: 0, minStock: 1000),
+        StockBalance(id: 'b1', ingredientId: 'ing1', code: 'CF-BEAN', name: 'Cà phê hạt', unit: 'g', onHand: 9906, reserved: 112, minStock: 500),
+        StockBalance(id: 'b2', ingredientId: 'ing2', code: 'MILK', name: 'Sữa tươi', unit: 'ml', onHand: 300, reserved: 0, minStock: 1000),
       ];
   @override
   Future<List<BomRecipe>> bomRecipes() async => [
@@ -91,6 +91,14 @@ class FakeAdminRepository extends AdminRepository {
   Future<void> createProduct({required String categoryId, required String name, required int basePrice, bool active = true}) async {}
   @override
   Future<void> updateProduct(String id, {String? name, String? categoryId, int? basePrice, bool? active}) async {}
+  @override
+  Future<void> createStaff({required String username, required String password, required String fullName, required String staffRole, String? branchId}) async {}
+  @override
+  Future<void> deactivateStaff(String id) async {}
+  @override
+  Future<void> reactivateStaff(String id) async {}
+  @override
+  Future<void> stockIn({required String branchId, required String ingredientId, required num quantity, String? reason}) async {}
 }
 
 /// A no-op TableRepository with a canned floor map for widget tests.
@@ -247,8 +255,8 @@ Future<void> pumpSignedIn(
         StaffMember(id: 'u2', username: 'barista01', fullName: 'Quách Đông', staffRole: 'BARISTA', status: 'ACTIVE'),
       ],
       balances: [
-        StockBalance(id: 'b1', code: 'CF-BEAN', name: 'Cà phê hạt', unit: 'g', onHand: 9906, reserved: 112, minStock: 500),
-        StockBalance(id: 'b2', code: 'MILK', name: 'Sữa tươi', unit: 'ml', onHand: 300, reserved: 0, minStock: 1000),
+        StockBalance(id: 'b1', ingredientId: 'ing1', code: 'CF-BEAN', name: 'Cà phê hạt', unit: 'g', onHand: 9906, reserved: 112, minStock: 500),
+        StockBalance(id: 'b2', ingredientId: 'ing2', code: 'MILK', name: 'Sữa tươi', unit: 'ml', onHand: 300, reserved: 0, minStock: 1000),
       ],
       boms: [
         BomRecipe(id: 'r1', name: 'BOM Trân châu', isActive: true, items: [

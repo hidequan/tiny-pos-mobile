@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../../state/admin_data_controller.dart';
+import '../../models/admin.dart';
 import '../../data/seed.dart';
 import '../../theme/palette.dart';
 import '../../theme/typography.dart';
@@ -10,6 +11,7 @@ import '../../widgets/common.dart';
 import '../../widgets/shell.dart';
 import 'admin_widgets.dart';
 import 'admin_sheets.dart';
+import 'staff_form.dart';
 
 /// Nhân viên & RBAC.
 class StaffScreen extends StatefulWidget {
@@ -38,6 +40,44 @@ class _StaffScreenState extends State<StaffScreen> {
         _ => BadgeColor.red,
       };
 
+  void _staffActions(BuildContext context, AdminDataController a, StaffMember s) {
+    context.shell.showSheet((_) => AppSheet(
+          title: s.fullName.trim().isEmpty ? s.username : s.fullName,
+          headerExtra: [AppBadge(s.roleLabel, color: _badge(s.staffRole))],
+          body: Builder(builder: (context) {
+            final p = context.palette;
+            return CardBox(
+              radius: 14,
+              padding: const EdgeInsets.all(14),
+              child: Column(children: [
+                KvRow('Tên đăng nhập', Text('@${s.username}', style: AppType.body(size: 14, weight: FontWeight.w800, color: p.ink))),
+                KvRow('Vai trò', Text(s.roleLabel, style: AppType.body(size: 14, weight: FontWeight.w800, color: p.ink))),
+                KvRow('Trạng thái', Text(s.active ? 'Đang hoạt động' : 'Đã khoá',
+                    style: AppType.body(size: 14, weight: FontWeight.w800, color: s.active ? p.greenD : p.muted)), last: true),
+              ]),
+            );
+          }),
+          footer: s.active
+              ? Builder(builder: (context) {
+                  final p = context.palette;
+                  return AppButton('Khoá tài khoản', icon: 'logout', large: true, block: true,
+                      variant: BtnVariant.soft, textColor: p.red, onTap: () async {
+                    context.shell.closeSheet();
+                    final err = await a.deactivateStaff(s.id);
+                    if (!context.mounted) return;
+                    context.shell.toast(err ?? 'Đã khoá tài khoản ${s.username}', err == null ? 'check' : 'edit');
+                  });
+                })
+              : AppButton('Mở khoá tài khoản', icon: 'check', large: true, block: true,
+                  variant: BtnVariant.ghost, onTap: () async {
+                  context.shell.closeSheet();
+                  final err = await a.reactivateStaff(s.id);
+                  if (!context.mounted) return;
+                  context.shell.toast(err ?? 'Đã mở khoá ${s.username}', err == null ? 'check' : 'edit');
+                }),
+        ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final a = context.watch<AdminDataController>();
@@ -48,7 +88,7 @@ class _StaffScreenState extends State<StaffScreen> {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 16),
           children: [
-            SectionHeader('Danh sách nhân viên', action: '+ Thêm', onAction: () => openAddStaff(context)),
+            SectionHeader('Danh sách nhân viên', action: '+ Thêm', onAction: () => openStaffForm(context)),
             if (a.staffLoading && !a.staffLoaded)
               Padding(padding: const EdgeInsets.all(28), child: Center(child: CircularProgressIndicator(color: p.terracotta)))
             else if (a.staffError != null && !a.staffLoaded)
@@ -68,6 +108,7 @@ class _StaffScreenState extends State<StaffScreen> {
                 child: RowList([
                   for (final s in a.staff)
                     ListRow(
+                      onTap: () => _staffActions(context, a, s),
                       leading: Avatar(s.initials),
                       title: s.fullName.trim().isEmpty ? s.username : s.fullName,
                       subtitle: '@${s.username}',
