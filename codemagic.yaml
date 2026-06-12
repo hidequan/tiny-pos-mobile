@@ -92,9 +92,8 @@ workflows:
       flutter: *flutter_version
       xcode: latest
       cocoapods: default
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.tinypos.tinyPosMobile   # must match Xcode + App Store Connect
+      vars:
+        BUNDLE_ID: "com.tinypos.tinyPosMobile"   # must match Apple Developer / App Store Connect
     scripts:
       - name: Disable Swift Package Manager (printing plugin lacks SPM support)
         script: flutter config --no-enable-swift-package-manager
@@ -102,8 +101,20 @@ workflows:
         script: flutter pub get
       - name: Install CocoaPods
         script: find . -name "Podfile" -execdir pod install \;
-      - name: Set up code signing (manual profiles from App Store Connect integration)
-        script: xcode-project use-profiles
+      # Explicitly CREATE the distribution certificate + app_store provisioning
+      # profile (and register the App ID) if they don't exist yet. This is what
+      # fixes "No matching profiles found ... distribution type app_store".
+      # Requires the App Store Connect API key (integration tiny_appstore) to
+      # have the App Manager (or Admin) role.
+      - name: Set up code signing (create cert + app_store profile if missing)
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --platform IOS \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
       - name: Build IPA
         script: |
           flutter build ipa --release \
