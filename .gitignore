@@ -58,3 +58,8 @@ artifacts/
 # Firebase service account (secret)
 firebase-sa.json
 *-service-account*.json
+
+# Puppeteer debug/verification screenshots (regenerable via tool/*.cjs).
+# Keep only the numbered store-listing screenshots (01-..06-..).
+assets/store/screenshots/*
+!assets/store/screenshots/0*.png
