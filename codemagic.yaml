@@ -92,8 +92,17 @@ workflows:
       flutter: *flutter_version
       xcode: latest
       cocoapods: default
-      vars:
-        BUNDLE_ID: "com.tinypos.tinyPosMobile"   # must match Apple Developer / App Store Connect
+      # Codemagic's managed iOS signing: it reuses the DISTRIBUTION certificate
+      # stored in your Codemagic team's "code signing identities" (persistent
+      # across the ephemeral build machines) and auto-fetches/creates the
+      # app_store provisioning profile for the bundle id.
+      # PREREQUISITE (one-time, in the Codemagic UI): Team settings → Code
+      # signing identities → iOS certificates → "Generate certificate" (or
+      # upload a .p12). Without a stored distribution cert, the build fails with
+      # "No valid code signing certificates were found".
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.tinypos.tinyPosMobile   # must match Apple Developer / App Store Connect
     scripts:
       - name: Disable Swift Package Manager (printing plugin lacks SPM support)
         script: flutter config --no-enable-swift-package-manager
@@ -101,20 +110,8 @@ workflows:
         script: flutter pub get
       - name: Install CocoaPods
         script: find . -name "Podfile" -execdir pod install \;
-      # Explicitly CREATE the distribution certificate + app_store provisioning
-      # profile (and register the App ID) if they don't exist yet. This is what
-      # fixes "No matching profiles found ... distribution type app_store".
-      # Requires the App Store Connect API key (integration tiny_appstore) to
-      # have the App Manager (or Admin) role.
-      - name: Set up code signing (create cert + app_store profile if missing)
-        script: |
-          keychain initialize
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --platform IOS \
-            --create
-          keychain add-certificates
-          xcode-project use-profiles
+      - name: Set up code signing (apply the managed cert + profile to Xcode)
+        script: xcode-project use-profiles
       - name: Build IPA
         script: |
           flutter build ipa --release \
