@@ -143,6 +143,39 @@ class CartLine {
       );
 }
 
+/// A parked (held) order — the current cart saved locally so the cashier can
+/// start a new customer and resume it later. Mirrors the web cart-store Draft.
+class Draft {
+  final String id;
+  final String label;
+  final String otype; // 'takeaway' | 'dinein'
+  final List<CartLine> items;
+  final int savedAt; // ms since epoch
+
+  Draft({required this.id, required this.label, required this.otype, required this.items, required this.savedAt});
+
+  int get count => items.fold(0, (s, it) => s + it.qty);
+  int get total => items.fold(0, (s, it) => s + it.price * it.qty);
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'label': label,
+        'otype': otype,
+        'savedAt': savedAt,
+        'items': items.map((c) => c.toJson()).toList(),
+      };
+
+  factory Draft.fromJson(Map<String, dynamic> j) => Draft(
+        id: j['id'] as String,
+        label: (j['label'] ?? '') as String,
+        otype: (j['otype'] ?? 'takeaway') as String,
+        savedAt: (j['savedAt'] as num?)?.toInt() ?? 0,
+        items: ((j['items'] as List?) ?? const [])
+            .map((e) => CartLine.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList(),
+      );
+}
+
 class Order {
   final String code;
   final String type; // 'dinein' | 'takeaway'

@@ -3,15 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../../state/kds_controller.dart';
 import '../../models/kds.dart';
-import '../../services/receipt.dart';
 import '../../theme/palette.dart';
 import '../../theme/typography.dart';
-import '../../theme/app_icons.dart';
 import '../../widgets/common.dart';
 import '../../widgets/shell.dart';
 import 'kds_profile.dart';
-
-String fmtAgo(int s) => '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
 
 /// KDS / Bar queue — real tickets from /kds/tickets (polled).
 class KdsQueueScreen extends StatefulWidget {
@@ -22,6 +18,28 @@ class KdsQueueScreen extends StatefulWidget {
 
 class _KdsQueueScreenState extends State<KdsQueueScreen> {
   KdsController? _ctl;
+  String _filter = 'all'; // all | waiting | preparing
+  String _search = '';
+
+  static const _prepStatuses = ['PREPARING', 'PARTIAL_READY', 'READY'];
+
+  List<KdsTicket> _filtered(List<KdsTicket> all) {
+    var list = switch (_filter) {
+      'waiting' => all.where((t) => t.status == 'WAITING').toList(),
+      'preparing' => all.where((t) => _prepStatuses.contains(t.status)).toList(),
+      _ => all,
+    };
+    final q = _search.trim().toLowerCase();
+    if (q.isNotEmpty) {
+      list = list
+          .where((t) =>
+              t.ticketCode.toLowerCase().contains(q) ||
+              (t.tableLabel ?? '').toLowerCase().contains(q) ||
+              t.items.any((i) => i.productName.toLowerCase().contains(q)))
+          .toList();
+    }
+    return list;
+  }
 
   @override
   void didChangeDependencies() {
@@ -72,6 +90,12 @@ class _KdsQueueScreenState extends State<KdsQueueScreen> {
           Expanded(child: _statBox(context, '${ctl.stats.completed}', 'Đã xong', p.greenD)),
         ]),
       ),
+      SearchField(hint: 'Tìm mã đơn / bàn / món...', value: _search, onChanged: (v) => setState(() => _search = v)),
+      ChipsRow(children: [
+        PillChip('Tất cả', emoji: '📋', on: _filter == 'all', onTap: () => setState(() => _filter = 'all')),
+        PillChip('Chờ pha', on: _filter == 'waiting', onTap: () => setState(() => _filter = 'waiting')),
+        PillChip('Đang pha', on: _filter == 'preparing', onTap: () => setState(() => _filter = 'preparing')),
+      ]),
       Expanded(child: _body(context, ctl, now)),
     ]);
   }
@@ -92,9 +116,13 @@ class _KdsQueueScreenState extends State<KdsQueueScreen> {
         ]),
       );
     }
-    final tickets = ctl.tickets;
+    final tickets = _filtered(ctl.tickets);
     if (tickets.isEmpty) {
-      return const EmptyState(emoji: '✅', title: 'Không còn đơn nào', sub: 'Tất cả đã pha xong. Nghỉ tay chút nhé!');
+      final hasAny = ctl.tickets.isNotEmpty;
+      final (emoji, title, sub) = _search.trim().isNotEmpty || (hasAny && _filter != 'all')
+          ? ('🔍', 'Không có đơn khớp', 'Thử bỏ lọc hoặc đổi từ khóa')
+          : ('✅', 'Không còn đơn nào', 'Tất cả đã pha xong. Nghỉ tay chút nhé!');
+      return EmptyState(emoji: emoji, title: title, sub: sub);
     }
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 2, 16, 16),
@@ -128,10 +156,12 @@ class _TicketCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final ctl = context.read<KdsController>();
     final p = context.palette;
-    final ago = ticket.agoSeconds(now);
-    final accent = ago >= 360 ? p.red : (ago >= 180 ? p.amber : p.green);
-    final timerColor = ago >= 360 ? p.red : (ago >= 180 ? p.amber : p.greenD);
-    final allDone = ticket.allDone;
+    final mins = ticket.agoSeconds(now) ~/ 60;
+    final overdue = mins >= 10 && ticket.status != 'READY';
+    // Card accent follows the STATUS (mirrors the web TICKET_BORDER) so it
+    // changes the moment the bar presses "Bắt đầu làm" / "Hoàn thành".
+    final accent = _accent(p, ticket.status);
+    final timerColor = overdue ? p.red : p.muted;
 
     return Container(
       decoration: BoxDecoration(
@@ -170,15 +200,18 @@ class _TicketCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Text(fmtAgo(ago), style: AppType.body(size: 13, weight: FontWeight.w800, color: timerColor)),
-                      const SizedBox(width: 5),
-                      Icon(AppIcons.get('clock'), size: 14, color: timerColor),
+                      Text('$mins phút${overdue ? ' ⚠' : ''}',
+                          style: AppType.body(size: 13, weight: FontWeight.w800, color: timerColor)),
                     ]),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+                    child: Align(alignment: Alignment.centerLeft, child: _statusBadge(ticket.status)),
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
                     child: Column(children: [
-                      for (var k = 0; k < ticket.items.length; k++) _item(context, ctl, ticket.items[k], k > 0),
+                      for (var k = 0; k < ticket.items.length; k++) _item(context, ticket.items[k], k > 0),
                     ]),
                   ),
                 ]),
@@ -187,88 +220,76 @@ class _TicketCard extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-            child: Row(children: [
-              Expanded(
-                child: AppButton('Tem', icon: 'print', variant: BtnVariant.ghost,
-                    onTap: () => _printLabels(context)),
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: AppButton(
-                  allDone ? 'Hoàn thành' : 'Xong tất cả',
-                  icon: 'check',
-                  variant: allDone ? BtnVariant.pri : BtnVariant.dark,
-                  onTap: () {
-                    ctl.bumpTicket(ticket.id);
-                    context.shell.toast('Đơn ${ticket.ticketCode} đã hoàn thành', 'check');
-                  },
-                ),
-              ),
-            ]),
+            child: ticket.status == 'WAITING'
+                ? AppButton(
+                    'Bắt đầu làm',
+                    icon: 'fire',
+                    block: true,
+                    variant: BtnVariant.dark,
+                    onTap: () {
+                      ctl.startTicket(ticket.id);
+                      context.shell.toast('Bắt đầu pha đơn ${ticket.ticketCode}', 'fire');
+                    },
+                  )
+                : AppButton(
+                    'Hoàn thành',
+                    icon: 'check',
+                    block: true,
+                    variant: BtnVariant.pri,
+                    onTap: () {
+                      ctl.bumpTicket(ticket.id);
+                      context.shell.toast('Đơn ${ticket.ticketCode} đã hoàn thành', 'check');
+                    },
+                  ),
           ),
         ],
       ),
     );
   }
 
-  Future<void> _printLabels(BuildContext context) async {
-    final items = [
-      for (final it in ticket.items)
-        LabelItem(productName: it.productName, variantName: it.variantName, mods: it.mods, quantity: it.quantity),
-    ];
-    try {
-      await ReceiptService.printLabels(ticket.ticketCode, items);
-    } catch (_) {
-      if (context.mounted) context.shell.toast('Không mở được bản in tem', 'edit');
-    }
+  Color _accent(Palette p, String status) => switch (status) {
+        'WAITING' => p.amber,
+        'PREPARING' || 'PARTIAL_READY' => const Color(0xFF3E7C74), // teal
+        'READY' => p.greenD,
+        'SERVED' || 'COMPLETED' => p.muted,
+        _ => p.line2,
+      };
+
+  Widget _statusBadge(String status) {
+    final (txt, col) = switch (status) {
+      'WAITING' => ('● Chờ pha', BadgeColor.amber),
+      'PREPARING' || 'PARTIAL_READY' => ('● Đang pha', BadgeColor.blue),
+      'READY' => ('● Sẵn sàng', BadgeColor.green),
+      'SERVED' || 'COMPLETED' => ('✓ Hoàn thành', BadgeColor.gray),
+      _ => ('● Chờ pha', BadgeColor.amber),
+    };
+    return AppBadge(txt, color: col);
   }
 
-  Widget _item(BuildContext context, KdsController ctl, KdsTicketItem item, bool border) {
+  Widget _item(BuildContext context, KdsTicketItem item, bool border) {
     final p = context.palette;
-    final busy = ctl.itemBusy(item.id);
-    return GestureDetector(
-      onTap: item.done || busy ? null : () => ctl.markItemDone(item.id),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(border: border ? Border(top: BorderSide(color: p.line)) : null),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            constraints: const BoxConstraints(minWidth: 26),
-            height: 26,
-            decoration: BoxDecoration(color: item.done ? p.green : p.espresso, borderRadius: BorderRadius.circular(8)),
-            alignment: Alignment.center,
-            child: Text('${item.quantity}', style: AppType.body(size: 13, weight: FontWeight.w800, color: Colors.white)),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-              Text(
-                item.variantName != null && item.variantName!.isNotEmpty ? '${item.productName} (${item.variantName})' : item.productName,
-                style: AppType.body(size: 14.5, weight: FontWeight.w700, color: item.done ? p.muted : p.ink)
-                    .copyWith(decoration: item.done ? TextDecoration.lineThrough : null),
-              ),
-              if (item.mods.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(item.mods, style: AppType.body(size: 12, weight: FontWeight.w500, color: p.ink2)),
-              ],
-            ]),
-          ),
-          const SizedBox(width: 8),
-          busy
-              ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.2, color: p.muted))
-              : Container(
-                  width: 26,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    color: item.done ? p.green : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: item.done ? p.green : p.line2, width: 2),
-                  ),
-                  child: item.done ? const Icon(Icons.check_rounded, size: 15, color: Colors.white) : null,
-                ),
-        ]),
-      ),
+    final done = item.done;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      decoration: BoxDecoration(border: border ? Border(top: BorderSide(color: p.line)) : null),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('${item.quantity}×',
+            style: AppType.body(size: 14, weight: FontWeight.w800, color: done ? p.muted : p.ink2)),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text(
+              item.variantName != null && item.variantName!.isNotEmpty ? '${item.productName} (${item.variantName})' : item.productName,
+              style: AppType.body(size: 14.5, weight: FontWeight.w700, color: done ? p.muted : p.ink)
+                  .copyWith(decoration: done ? TextDecoration.lineThrough : null),
+            ),
+            if (item.mods.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(item.mods, style: AppType.body(size: 12, weight: FontWeight.w500, color: p.ink2)),
+            ],
+          ]),
+        ),
+      ]),
     );
   }
 }

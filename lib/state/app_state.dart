@@ -19,6 +19,7 @@ class AppState extends ChangeNotifier {
   String cashTab = 'sell';
   String cat = 'all';
   final List<CartLine> cart = [];
+  final List<Draft> drafts = []; // parked orders (local, persisted) — see web cart-store
   String otype = 'takeaway'; // takeaway | dinein
   String? table;
   bool disc = false;
@@ -52,6 +53,8 @@ class AppState extends ChangeNotifier {
   int received = 0;
   Bill? payBill; // the real server draft bill being paid (created when pay opens)
   String? appliedVoucher; // voucher code applied to payBill, if any
+  bool payBillSent = false; // pay-bill already on the bar (pending/unpaid) → don't re-send after pay
+  Bill? pendingBill; // a TAKE_AWAY bill sent to bar awaiting payment ("Gửi Bar, thu sau")
 
   // ---- kds ----
   String kdsTab = 'queue';
@@ -290,6 +293,52 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ---- drafts (parked orders) — mirrors the web cart-store -----------------
+  String _autoDraftLabel() {
+    final t = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return 'Đơn ${two(t.hour)}:${two(t.minute)}';
+  }
+
+  Draft _toDraft(String? label) => Draft(
+        id: 'd${DateTime.now().microsecondsSinceEpoch}',
+        label: (label != null && label.trim().isNotEmpty) ? label.trim() : _autoDraftLabel(),
+        otype: otype,
+        items: List<CartLine>.from(cart),
+        savedAt: DateTime.now().millisecondsSinceEpoch,
+      );
+
+  /// Park the current cart as a draft and clear it to serve a new customer.
+  void parkDraft({String? label}) {
+    if (cart.isEmpty) return;
+    drafts.insert(0, _toDraft(label));
+    cart.clear();
+    disc = false;
+    _save();
+    notifyListeners();
+  }
+
+  /// Resume a draft. If the cart is non-empty, it is auto-parked first (no loss).
+  void resumeDraft(String id) {
+    final i = drafts.indexWhere((d) => d.id == id);
+    if (i < 0) return;
+    final target = drafts.removeAt(i);
+    if (cart.isNotEmpty) drafts.insert(0, _toDraft(null));
+    cart
+      ..clear()
+      ..addAll(target.items);
+    otype = target.otype;
+    disc = false;
+    _save();
+    notifyListeners();
+  }
+
+  void removeDraft(String id) {
+    drafts.removeWhere((d) => d.id == id);
+    _save();
+    notifyListeners();
+  }
+
   void setOtype(String t) {
     otype = t;
     notifyListeners();
@@ -325,8 +374,11 @@ class AppState extends ChangeNotifier {
     table = null;
     otype = 'takeaway';
     checkoutBusy = false;
+    // If the bill just paid was the pending "Gửi Bar, thu sau" one, retire it.
+    if (pendingBill != null && pendingBill!.id == payBill?.id) pendingBill = null;
     payBill = null;
     appliedVoucher = null;
+    payBillSent = false;
     _save();
     notifyListeners();
   }
@@ -338,15 +390,24 @@ class AppState extends ChangeNotifier {
     received = 0;
     payBill = null;
     appliedVoucher = null;
+    payBillSent = false;
     notifyListeners();
   }
 
   /// Bind the real server bill (created at pay-open) so the pay sheet shows the
-  /// server-computed total + any voucher discount.
-  void setPayBill(Bill b, {String? voucher}) {
+  /// server-computed total + any voucher discount. [sent] marks a bill that was
+  /// already pushed to the bar (pending/unpaid) so we don't re-send after paying.
+  void setPayBill(Bill b, {String? voucher, bool? sent}) {
     payBill = b;
     appliedVoucher = voucher;
     payTotal = b.grandTotal;
+    if (sent != null) payBillSent = sent;
+    notifyListeners();
+  }
+
+  /// Track / clear the TAKE_AWAY bill sent to the bar awaiting payment.
+  void setPendingBill(Bill? b) {
+    pendingBill = b;
     notifyListeners();
   }
 
@@ -572,6 +633,11 @@ class AppState extends ChangeNotifier {
           ..clear()
           ..addAll((j['orders'] as List).map((e) => Order.fromJson(Map<String, dynamic>.from(e as Map))));
       }
+      if (j['drafts'] is List) {
+        drafts
+          ..clear()
+          ..addAll((j['drafts'] as List).map((e) => Draft.fromJson(Map<String, dynamic>.from(e as Map))));
+      }
     } catch (_) {
       // Corrupt blob — ignore and start fresh.
     }
@@ -589,6 +655,7 @@ class AppState extends ChangeNotifier {
         'orderId': _orderId,
         'cart': cart.map((c) => c.toJson()).toList(),
         'orders': orders.map((o) => o.toJson()).toList(),
+        'drafts': drafts.map((d) => d.toJson()).toList(),
       }),
     );
   }

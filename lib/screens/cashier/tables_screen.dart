@@ -3,12 +3,16 @@ import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../../state/tables_controller.dart';
+import '../../api/api_client.dart';
+import '../../api/bill_repository.dart';
 import '../../models/table.dart';
+import '../../models/bill.dart';
 import '../../data/seed.dart' show vnd;
 import '../../theme/palette.dart';
 import '../../theme/typography.dart';
 import '../../widgets/common.dart';
 import '../../widgets/shell.dart';
+import 'cashier_sheets.dart' show openPayForBill;
 
 /// Sơ đồ bàn — real floor map (areas + tables) from /pos/table-map.
 class TablesScreen extends StatefulWidget {
@@ -283,8 +287,22 @@ class _TableCard extends StatelessWidget {
   }
 }
 
-/// Occupied-table detail: loads the full session (bills + items) and offers
-/// "Thêm món" (route Sell into this session) and "Đóng bàn".
+const _kBillStatusLabel = {
+  'DRAFT': 'Mới',
+  'SENT_TO_BAR_UNPAID': 'Đã gửi Bar',
+  'PENDING_PAYMENT': 'Chờ thu',
+  'PAID': 'Đã trả',
+  'COMPLETED': 'Hoàn tất',
+  'VOIDED': 'Đã huỷ',
+  'REFUNDED': 'Đã hoàn',
+};
+const _kBillActive = ['DRAFT', 'SENT_TO_BAR_UNPAID', 'PENDING_PAYMENT'];
+
+/// Occupied-table detail: full session with per-bill cards. Each bill can be
+/// Gửi Bar / Thanh toán (riêng từng bill) / Tách bill / Yêu cầu huỷ; the session
+/// can Gộp bill, Chuyển bàn, Ghép bàn, Thêm món, Đóng bàn. Ported from the web
+/// /pos/tables/[sessionId] page — all in ONE sheet via internal "modes" since
+/// the app shell shows a single sheet at a time.
 class _SessionDetailSheet extends StatefulWidget {
   final CafeTable table;
   final String sessionId;
@@ -296,7 +314,16 @@ class _SessionDetailSheet extends StatefulWidget {
 class _SessionDetailSheetState extends State<_SessionDetailSheet> {
   TableSessionDetail? _detail;
   String? _error;
-  bool _closing = false;
+  bool _busy = false;
+  String _mode = 'list'; // list | split | mergeBills | transfer | merge | void | refund
+  Bill? _bill; // target bill for split / void / refund
+  final TextEditingController _reason = TextEditingController();
+  final Map<String, int> _split = {}; // billItemId -> qty to move
+  final Set<String> _mergePick = {}; // billIds to merge
+  bool _alsoMergeBills = false;
+
+  TablesController get _ctl => context.read<TablesController>();
+  BillRepository get _bills => context.read<BillRepository>();
 
   @override
   void initState() {
@@ -304,112 +331,520 @@ class _SessionDetailSheetState extends State<_SessionDetailSheet> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _reason.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     try {
-      final d = await context.read<TablesController>().sessionDetail(widget.sessionId);
+      final d = await _ctl.sessionDetail(widget.sessionId);
       if (mounted) setState(() => _detail = d);
     } catch (_) {
       if (mounted) setState(() => _error = 'Không tải được chi tiết bàn');
     }
   }
 
+  void _toList() => setState(() {
+        _mode = 'list';
+        _bill = null;
+        _reason.clear();
+        _split.clear();
+        _mergePick.clear();
+        _alsoMergeBills = false;
+      });
+
+  bool _hasDraft(Bill b) => b.items.any((i) => i.status == 'DRAFT');
+
+  Future<void> _run(Future<String?> Function() op, String okMsg) async {
+    setState(() => _busy = true);
+    final err = await op();
+    if (!mounted) return;
+    await _load();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    _toList();
+    context.shell.toast(err ?? okMsg, err == null ? 'check' : 'edit');
+  }
+
+  // ---- per-bill actions ----------------------------------------------------
+  Future<void> _sendBar(Bill b) async {
+    setState(() => _busy = true);
+    String? err;
+    try {
+      await _bills.sendToBar(b.id);
+    } on ApiException catch (e) {
+      err = e.message;
+    } catch (_) {
+      err = 'Lỗi gửi Bar';
+    }
+    if (!mounted) return;
+    await _load();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    context.shell.toast(err ?? 'Đã gửi Bar', err == null ? 'check' : 'edit');
+  }
+
+  void _pay(Bill b) {
+    // Reuse the full pay sheet (voucher + cash/QR). Dine-in items are sent to
+    // the bar via "Gửi Bar", so suppress the post-pay auto-send (sent: true).
+    context.shell.closeSheet();
+    openPayForBill(context, b, sent: true);
+  }
+
+  Future<void> _submitReason() async {
+    final b = _bill;
+    final reason = _reason.text.trim();
+    if (b == null || reason.length < 2) return;
+    await _run(() async {
+      try {
+        if (_mode == 'void') {
+          await _bills.voidRequest(b.id, reason);
+        } else {
+          await _bills.refundRequest(b.id, amount: b.grandTotal, reason: reason);
+        }
+        return null;
+      } on ApiException catch (e) {
+        return e.message;
+      } catch (_) {
+        return 'Gửi yêu cầu thất bại';
+      }
+    }, 'Đã gửi yêu cầu cho quản lý duyệt');
+  }
+
+  Future<void> _doSplit() async {
+    final b = _bill;
+    if (b == null) return;
+    final items = _split.entries
+        .where((e) => e.value > 0)
+        .map((e) => {'billItemId': e.key, 'quantity': e.value})
+        .toList();
+    if (items.isEmpty) return;
+    await _run(() => _ctl.splitBill(widget.sessionId, b.id, items), 'Đã tách bill');
+  }
+
+  Future<void> _doMergeBills() async {
+    if (_mergePick.length < 2) return;
+    await _run(() => _ctl.mergeBillsOp(widget.sessionId, _mergePick.toList()), 'Đã gộp bill');
+  }
+
+  Future<void> _doTransfer(String toTableId) async =>
+      _run(() => _ctl.transferTable(widget.sessionId, toTableId), 'Đã chuyển bàn');
+
+  Future<void> _doMerge(String sourceSessionId) async =>
+      _run(() => _ctl.mergeTable(widget.sessionId, sourceSessionId, mergeBills: _alsoMergeBills), 'Đã ghép bàn');
+
+  // ---- build ---------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final d = _detail;
+    if (_error != null) {
+      return AppSheet(
+        title: 'Bàn ${widget.table.label}',
+        body: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Text(_error!, textAlign: TextAlign.center, style: AppType.body(size: 13.5, color: p.muted)),
+        ),
+      );
+    }
+    if (d == null) {
+      return AppSheet(
+        title: 'Bàn ${widget.table.label}',
+        body: const Padding(padding: EdgeInsets.symmetric(vertical: 36), child: Center(child: CircularProgressIndicator())),
+      );
+    }
+    return switch (_mode) {
+      'split' => _splitSheet(p, d),
+      'mergeBills' => _mergeBillsSheet(p, d),
+      'transfer' => _pickTableSheet(p, transfer: true),
+      'merge' => _pickTableSheet(p, transfer: false),
+      'void' || 'refund' => _reasonSheet(p),
+      _ => _listSheet(p, d),
+    };
+  }
+
+  // ===== list mode =====
+  Widget _listSheet(Palette p, TableSessionDetail d) {
+    final visible = d.bills.where((b) => b.status != 'VOIDED').toList();
+    final activeBills = d.bills.where((b) => _kBillActive.contains(b.status)).toList();
     return AppSheet(
       title: 'Bàn ${widget.table.label}',
-      headerExtra: [AppBadge('Đang phục vụ', color: BadgeColor.blue)],
+      headerExtra: [AppBadge('${d.guestCount} khách', color: BadgeColor.blue)],
       body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        if (_error != null)
+        if (visible.isEmpty)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            child: Text(_error!, textAlign: TextAlign.center, style: AppType.body(size: 13.5, color: p.muted)),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text('Bàn vừa mở — chưa gọi món nào.',
+                style: AppType.body(size: 13.5, weight: FontWeight.w600, color: p.muted)),
           )
-        else if (d == null)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 30),
-            child: Center(child: CircularProgressIndicator(color: p.terracotta)),
-          )
-        else ...[
-          CardBox(
-            radius: 14,
-            padding: const EdgeInsets.all(14),
-            child: Column(children: [
-              KvRow('Số khách', Text('${d.guestCount} khách', style: AppType.body(size: 14, weight: FontWeight.w800, color: p.ink))),
-              KvRow('Số đơn', Text('${d.bills.where((b) => b.status != 'VOIDED').length}',
-                  style: AppType.body(size: 14, weight: FontWeight.w800, color: p.ink))),
-              KvRow('Tổng tạm tính', Text(vnd(d.grandTotal),
-                  style: AppType.body(size: 14, weight: FontWeight.w800, color: p.terracotta)), last: true),
-            ]),
-          ),
-          const SizedBox(height: 14),
-          if (d.itemCount == 0)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text('Bàn vừa mở — chưa gọi món nào.',
-                  style: AppType.body(size: 13.5, weight: FontWeight.w600, color: p.muted)),
-            )
-          else
-            for (final b in d.bills.where((b) => b.status != 'VOIDED' && b.items.isNotEmpty)) ...[
-              for (final it in b.items) _line(context, it.productName, it.variantName, it.quantity, it.lineTotal),
-            ],
-          const SizedBox(height: 4),
-        ],
+        else
+          for (final b in visible) _billCard(p, b),
+        const SizedBox(height: 6),
+        // Session-level operations.
+        Text('Thao tác bàn', style: AppType.body(size: 12.5, weight: FontWeight.w800, color: p.ink2)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          if (activeBills.length >= 2)
+            _opChip(p, 'Gộp bill (${activeBills.length})', 'layers', () {
+              _mergePick
+                ..clear()
+                ..addAll(activeBills.map((b) => b.id));
+              setState(() => _mode = 'mergeBills');
+            }),
+          _opChip(p, 'Chuyển bàn', 'forward', () => setState(() => _mode = 'transfer')),
+          _opChip(p, 'Ghép bàn', 'plus', () => setState(() => _mode = 'merge')),
+        ]),
       ]),
-      footer: d == null
-          ? null
-          : Row(children: [
-              Expanded(
-                child: AppButton('Thêm món', icon: 'plus', large: true, variant: BtnVariant.ghost, onTap: () {
-                  context.read<TablesController>().setActive(widget.sessionId, widget.table.label);
-                  context.read<AppState>().setCashTab('sell');
-                  context.shell.closeSheet();
-                  context.shell.toast('Gọi thêm món cho Bàn ${widget.table.label}', 'table');
-                }),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: AppButton(_closing ? 'Đang đóng…' : 'Đóng bàn', large: true, enabled: !_closing, onTap: () async {
-                  setState(() => _closing = true);
-                  final err = await context.read<TablesController>().closeSession(widget.sessionId);
-                  if (!context.mounted) return;
-                  if (err == null) {
-                    context.shell.closeSheet();
-                    context.shell.toast('Đã đóng Bàn ${widget.table.label}', 'check');
-                  } else {
-                    setState(() => _closing = false);
-                    context.shell.toast(err, 'edit');
-                  }
-                }),
-              ),
-            ]),
+      footer: Row(children: [
+        Expanded(
+          child: AppButton('Thêm món', icon: 'plus', large: true, variant: BtnVariant.ghost, onTap: () {
+            _ctl.setActive(widget.sessionId, widget.table.label);
+            context.read<AppState>().setCashTab('sell');
+            context.shell.closeSheet();
+            context.shell.toast('Gọi thêm món cho Bàn ${widget.table.label}', 'table');
+          }),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: AppButton(_busy ? 'Đang đóng…' : 'Đóng bàn', large: true, enabled: !_busy, onTap: () async {
+            setState(() => _busy = true);
+            final err = await _ctl.closeSession(widget.sessionId);
+            if (!mounted) return;
+            if (err == null) {
+              context.shell.closeSheet();
+              context.shell.toast('Đã đóng Bàn ${widget.table.label}', 'check');
+            } else {
+              setState(() => _busy = false);
+              context.shell.toast(err, 'edit');
+            }
+          }),
+        ),
+      ]),
     );
   }
 
-  Widget _line(BuildContext context, String name, String? variant, int qty, int total) {
-    final p = context.palette;
+  Widget _billCard(Palette p, Bill b) {
+    final active = _kBillActive.contains(b.status);
+    final paid = b.status == 'PAID' || b.status == 'COMPLETED';
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.line))),
-      child: Row(children: [
-        Container(
-          constraints: const BoxConstraints(minWidth: 26),
-          height: 26,
-          decoration: BoxDecoration(color: p.espresso, borderRadius: BorderRadius.circular(8)),
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: Text('$qty', style: AppType.body(size: 13, weight: FontWeight.w800, color: Colors.white)),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: p.paper,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: p.line),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(13, 11, 13, 9),
+          child: Row(children: [
+            Flexible(
+              child: Text(b.billCode,
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: AppType.body(size: 14.5, weight: FontWeight.w800, color: p.ink)),
+            ),
+            const SizedBox(width: 8),
+            AppBadge(_kBillStatusLabel[b.status] ?? b.status, color: paid ? BadgeColor.green : BadgeColor.amber),
+            const SizedBox(width: 8),
+            Text(vnd(b.grandTotal), style: AppType.body(size: 15, weight: FontWeight.w800, color: p.terracotta)),
+          ]),
         ),
-        const SizedBox(width: 11),
-        Expanded(
+        if (b.items.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 11),
+            child: Text('Chưa có món', textAlign: TextAlign.center, style: AppType.body(size: 13, color: p.muted)),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 13),
+            child: Column(children: [
+              for (final it in b.items)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${it.quantity}×', style: AppType.body(size: 13.5, weight: FontWeight.w800, color: p.ink2)),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(it.productName, style: AppType.body(size: 13.5, weight: FontWeight.w600, color: p.ink))),
+                    Text(vnd(it.lineTotal), style: AppType.body(size: 13, weight: FontWeight.w700, color: p.ink2)),
+                  ]),
+                ),
+            ]),
+          ),
+        if (active || paid)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(11, 8, 11, 11),
+            child: Wrap(spacing: 7, runSpacing: 7, children: [
+              if (active && _hasDraft(b)) _act(p, 'Gửi Bar', BtnVariant.dark, () => _sendBar(b)),
+              if (active && b.grandTotal > 0) _act(p, 'Thanh toán', BtnVariant.pri, () => _pay(b)),
+              if (active && b.items.isNotEmpty)
+                _act(p, 'Tách bill', BtnVariant.soft, () {
+                  _split.clear();
+                  setState(() {
+                    _bill = b;
+                    _mode = 'split';
+                  });
+                }),
+              if (active)
+                _act(p, 'Yêu cầu huỷ', BtnVariant.ghost, () {
+                  _reason.clear();
+                  setState(() {
+                    _bill = b;
+                    _mode = 'void';
+                  });
+                }, danger: true),
+              if (paid)
+                _act(p, 'Yêu cầu hoàn tiền', BtnVariant.ghost, () {
+                  _reason.clear();
+                  setState(() {
+                    _bill = b;
+                    _mode = 'refund';
+                  });
+                }, danger: true),
+            ]),
+          ),
+      ]),
+    );
+  }
+
+  Widget _act(Palette p, String label, BtnVariant variant, VoidCallback onTap, {bool danger = false}) {
+    return AppButton(label, variant: variant, enabled: !_busy, textColor: danger ? p.red : null, onTap: onTap);
+  }
+
+  Widget _opChip(Palette p, String label, String icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: _busy ? null : onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+        decoration: BoxDecoration(
+          color: p.cream2,
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(color: p.line2),
+        ),
+        child: Text(label, style: AppType.body(size: 13, weight: FontWeight.w800, color: p.ink2)),
+      ),
+    );
+  }
+
+  // ===== split mode =====
+  Widget _splitSheet(Palette p, TableSessionDetail d) {
+    final b = _bill!;
+    final moved = b.items.fold<int>(0, (s, it) => s + it.unitPrice * (_split[it.id] ?? 0));
+    final any = _split.values.any((q) => q > 0);
+    return AppSheet(
+      title: 'Tách bill',
+      headerExtra: [AppBadge(b.billCode, color: BadgeColor.gray)],
+      body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text('Chọn món/số lượng tách sang bill mới',
+              style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.muted)),
+        ),
+        for (final it in b.items)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(color: p.paper, borderRadius: BorderRadius.circular(12), border: Border.all(color: p.line)),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                  Text(it.productName, style: AppType.body(size: 14, weight: FontWeight.w700, color: p.ink)),
+                  Text('${it.quantity}× · ${vnd(it.unitPrice)}', style: AppType.body(size: 12, weight: FontWeight.w600, color: p.muted)),
+                ]),
+              ),
+              const SizedBox(width: 10),
+              QtyStepper(
+                value: _split[it.id] ?? 0,
+                small: true,
+                onChange: (delta) => setState(() {
+                  final next = ((_split[it.id] ?? 0) + delta).clamp(0, it.quantity);
+                  _split[it.id] = next;
+                }),
+              ),
+            ]),
+          ),
+      ]),
+      footer: Column(mainAxisSize: MainAxisSize.min, children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('Tách sang bill mới', style: AppType.body(size: 14, weight: FontWeight.w700, color: p.ink2)),
+            Text(vnd(moved), style: AppType.body(size: 16, weight: FontWeight.w800, color: p.terracotta)),
+          ]),
+        ),
+        Row(children: [
+          AppButton('Quay lại', large: true, variant: BtnVariant.soft, onTap: _busy ? null : _toList),
+          const SizedBox(width: 10),
+          Expanded(
+            child: AppButton(_busy ? 'Đang tách…' : 'Tách bill', icon: 'check', large: true, block: true,
+                enabled: any && !_busy, onTap: _doSplit),
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  // ===== merge-bills mode =====
+  Widget _mergeBillsSheet(Palette p, TableSessionDetail d) {
+    final active = d.bills.where((b) => _kBillActive.contains(b.status)).toList();
+    final selected = active.where((b) => _mergePick.contains(b.id)).toList();
+    final total = selected.fold<int>(0, (s, b) => s + b.grandTotal);
+    return AppSheet(
+      title: 'Gộp bill',
+      body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text('Chọn các bill (≥2) để gộp thành 1',
+              style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.muted)),
+        ),
+        for (final b in active)
+          GestureDetector(
+            onTap: () => setState(() => _mergePick.contains(b.id) ? _mergePick.remove(b.id) : _mergePick.add(b.id)),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              decoration: BoxDecoration(
+                color: _mergePick.contains(b.id) ? p.greenBg : p.paper,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _mergePick.contains(b.id) ? p.greenD : p.line),
+              ),
+              child: Row(children: [
+                Icon(_mergePick.contains(b.id) ? Icons.check_circle_rounded : Icons.circle_outlined,
+                    size: 20, color: _mergePick.contains(b.id) ? p.greenD : p.line2),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                    Text(b.billCode, style: AppType.body(size: 14, weight: FontWeight.w800, color: p.ink)),
+                    Text('${b.itemCount} món · ${_kBillStatusLabel[b.status] ?? b.status}',
+                        style: AppType.body(size: 12, weight: FontWeight.w600, color: p.muted)),
+                  ]),
+                ),
+                Text(vnd(b.grandTotal), style: AppType.body(size: 14, weight: FontWeight.w800, color: p.ink)),
+              ]),
+            ),
+          ),
+      ]),
+      footer: Column(mainAxisSize: MainAxisSize.min, children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('Bill gộp (${selected.length})', style: AppType.body(size: 14, weight: FontWeight.w700, color: p.ink2)),
+            Text(vnd(total), style: AppType.body(size: 16, weight: FontWeight.w800, color: p.terracotta)),
+          ]),
+        ),
+        Row(children: [
+          AppButton('Quay lại', large: true, variant: BtnVariant.soft, onTap: _busy ? null : _toList),
+          const SizedBox(width: 10),
+          Expanded(
+            child: AppButton(
+                _busy ? 'Đang gộp…' : (selected.length < 2 ? 'Chọn ≥2 bill' : 'Gộp ${selected.length} bill'),
+                icon: 'check', large: true, block: true,
+                enabled: selected.length >= 2 && !_busy, onTap: _doMergeBills),
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  // ===== transfer / merge: pick a table =====
+  Widget _pickTableSheet(Palette p, {required bool transfer}) {
+    final options = transfer ? _ctl.emptyTables() : _ctl.otherOpenTables(widget.sessionId);
+    return AppSheet(
+      title: transfer ? 'Chuyển sang bàn trống' : 'Ghép bàn khác vào bàn này',
+      body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (!transfer)
+          GestureDetector(
+            onTap: () => setState(() => _alsoMergeBills = !_alsoMergeBills),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              decoration: BoxDecoration(color: p.cream2, borderRadius: BorderRadius.circular(12)),
+              child: Row(children: [
+                Icon(_alsoMergeBills ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                    size: 20, color: _alsoMergeBills ? p.terracotta : p.line2),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('Gộp luôn bill thành 1 (khách trả chung)',
+                      style: AppType.body(size: 13.5, weight: FontWeight.w700, color: p.ink2)),
+                ),
+              ]),
+            ),
+          ),
+        if (options.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text(transfer ? 'Không có bàn trống' : 'Không có bàn khác đang mở',
+                textAlign: TextAlign.center, style: AppType.body(size: 13.5, color: p.muted)),
+          )
+        else
+          for (final t in options)
+            GestureDetector(
+              onTap: _busy
+                  ? null
+                  : () => transfer ? _doTransfer(t.id) : _doMerge(t.session!.id),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
+                decoration: BoxDecoration(color: p.paper, borderRadius: BorderRadius.circular(12), border: Border.all(color: p.line)),
+                child: Row(children: [
+                  LeadIcon(icon: 'table'),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      transfer ? '${t.label} · ${t.seats} chỗ' : '${t.label} · ${t.session!.billCount} bill',
+                      style: AppType.body(size: 14.5, weight: FontWeight.w700, color: p.ink),
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, size: 20, color: p.faint),
+                ]),
+              ),
+            ),
+      ]),
+      footer: AppButton('Quay lại', large: true, block: true, variant: BtnVariant.soft, onTap: _busy ? null : _toList),
+    );
+  }
+
+  // ===== void / refund reason =====
+  Widget _reasonSheet(Palette p) {
+    final b = _bill!;
+    final isVoid = _mode == 'void';
+    final ok = _reason.text.trim().length >= 2;
+    return AppSheet(
+      title: isVoid ? 'Yêu cầu huỷ bill' : 'Yêu cầu hoàn tiền',
+      headerExtra: [AppBadge(b.billCode, color: BadgeColor.gray)],
+      body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(0, 2, 0, 10),
           child: Text(
-            (variant != null && variant.isNotEmpty) ? '$name ($variant)' : name,
-            style: AppType.body(size: 14.5, weight: FontWeight.w700, color: p.ink),
+            isVoid ? 'Lý do huỷ đơn' : 'Lý do hoàn tiền (${vnd(b.grandTotal)})',
+            style: AppType.body(size: 13, weight: FontWeight.w800, color: p.ink2),
           ),
         ),
-        const SizedBox(width: 8),
-        Text(vnd(total), style: AppType.body(size: 14, weight: FontWeight.w800, color: p.ink)),
+        TextField(
+          controller: _reason,
+          onChanged: (_) => setState(() {}),
+          maxLines: 2,
+          style: AppType.body(size: 14.5, weight: FontWeight.w600, color: p.ink),
+          decoration: InputDecoration(
+            hintText: 'VD: khách đổi ý, pha sai, đồ lỗi…',
+            hintStyle: AppType.body(size: 14.5, weight: FontWeight.w500, color: p.faint),
+            filled: true,
+            fillColor: p.paper,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: p.line2, width: 1.5)),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: p.caramel, width: 1.5)),
+          ),
+        ),
+      ]),
+      footer: Row(children: [
+        AppButton('Quay lại', large: true, variant: BtnVariant.soft, onTap: _busy ? null : _toList),
+        const SizedBox(width: 10),
+        Expanded(
+          child: AppButton(_busy ? 'Đang gửi…' : 'Gửi yêu cầu', icon: 'check', large: true, block: true,
+              enabled: ok && !_busy, onTap: _submitReason),
+        ),
       ]),
     );
   }

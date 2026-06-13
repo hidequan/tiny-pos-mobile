@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../state/app_state.dart';
 import '../../state/session.dart';
 import '../../state/tables_controller.dart';
+import '../../state/shift_controller.dart';
 import '../../api/bill_repository.dart';
 import '../../api/api_client.dart';
 import '../../models/bill.dart';
@@ -174,6 +175,111 @@ void openCart(BuildContext context) {
   context.shell.showSheet((_) => const _CartSheet());
 }
 
+/// Parked-orders sheet (ported from the web drafts-modal). Resume re-loads the
+/// cart; the current cart (if any) is auto-parked so nothing is lost.
+void openDrafts(BuildContext context) {
+  context.shell.showSheet((_) => const _DraftsSheet());
+}
+
+class _DraftsSheet extends StatelessWidget {
+  const _DraftsSheet();
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AppState>(
+      builder: (context, state, _) {
+        final p = context.palette;
+        final drafts = state.drafts;
+        return AppSheet(
+          title: 'Đơn nháp đang giữ',
+          body: drafts.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: EmptyState(
+                      emoji: '📝', title: 'Chưa có đơn nháp', sub: 'Lưu đơn đang gọi dở để phục vụ khách mới'),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text('Đơn khách gọi dở — mở lại để chốt món bất kỳ lúc nào',
+                          style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.muted)),
+                    ),
+                    for (final d in drafts) _draftRow(context, state, d, p),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _draftRow(BuildContext context, AppState state, Draft d, Palette p) {
+    final summary = d.items.map((c) => '${c.qty}×${c.name}').join(', ');
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: p.paper,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: p.line),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Row(children: [
+              Flexible(
+                child: Text(d.label,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppType.body(size: 14.5, weight: FontWeight.w800, color: p.ink)),
+              ),
+              const SizedBox(width: 8),
+              AppBadge(d.otype == 'dinein' ? 'Tại bàn' : 'Mang đi',
+                  color: d.otype == 'dinein' ? BadgeColor.amber : BadgeColor.blue),
+            ]),
+          ),
+          Text(vnd(d.total), style: AppType.body(size: 15, weight: FontWeight.w800, color: p.terracotta)),
+        ]),
+        const SizedBox(height: 4),
+        Text('${d.count} món · $summary',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
+        const SizedBox(height: 11),
+        Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+          GestureDetector(
+            onTap: () {
+              state.removeDraft(d.id);
+              context.shell.toast('Đã xoá đơn nháp', 'edit');
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: p.line2),
+              ),
+              child: Text('Xoá', style: AppType.body(size: 13, weight: FontWeight.w800, color: p.red)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () {
+              state.resumeDraft(d.id);
+              context.shell.closeSheet();
+              openCart(context);
+              context.shell.toast('Đã mở lại đơn nháp', 'check');
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(color: p.terracotta, borderRadius: BorderRadius.circular(10)),
+              child: Text('Mở lại', style: AppType.body(size: 13, weight: FontWeight.w800, color: Colors.white)),
+            ),
+          ),
+        ]),
+      ]),
+    );
+  }
+}
+
 class _CartSheet extends StatelessWidget {
   const _CartSheet();
   @override
@@ -194,6 +300,19 @@ class _CartSheet extends StatelessWidget {
         return AppSheet(
           title: dineIn ? 'Gọi món · Bàn ${tables.activeTableLabel}' : 'Đơn hàng hiện tại',
           headerExtra: [
+            if (!dineIn)
+              GestureDetector(
+                onTap: () {
+                  state.parkDraft();
+                  context.shell.closeSheet();
+                  context.shell.toast('Đã lưu đơn nháp — bắt đầu đơn mới', 'check');
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(color: p.cream2, borderRadius: BorderRadius.circular(10)),
+                  child: Text('Lưu nháp', style: AppType.body(size: 13, weight: FontWeight.w800, color: p.ink2)),
+                ),
+              ),
             GestureDetector(
               onTap: () {
                 state.clearCart();
@@ -275,14 +394,30 @@ class _CartSheet extends StatelessWidget {
                   enabled: !state.checkoutBusy,
                   onTap: () => _sendToTable(context, state, tables),
                 )
-              : AppButton(
-                  state.checkoutBusy ? 'Đang mở...' : 'Thanh toán · ${vnd(tot)}',
-                  icon: 'card',
-                  large: true,
-                  block: true,
-                  enabled: !state.checkoutBusy,
-                  onTap: () => openPay(context, tot),
-                ),
+              : Row(children: [
+                  Expanded(
+                    child: AppButton(
+                      state.checkoutBusy ? '...' : 'Gửi Bar',
+                      icon: 'coffee',
+                      large: true,
+                      block: true,
+                      variant: BtnVariant.dark,
+                      enabled: !state.checkoutBusy,
+                      onTap: () => sendToBarCart(context),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: AppButton(
+                      state.checkoutBusy ? 'Đang mở...' : 'Thanh toán',
+                      icon: 'card',
+                      large: true,
+                      block: true,
+                      enabled: !state.checkoutBusy,
+                      onTap: () => openPay(context, tot),
+                    ),
+                  ),
+                ]),
         );
       },
     );
@@ -375,9 +510,29 @@ class _CartSheet extends StatelessWidget {
   }
 }
 
+/// Payment requires an OPEN shift (the backend rejects cash payment otherwise:
+/// "Bạn chưa mở ca"). Mirrors the web requireShift gate — block + send the
+/// cashier to the shift tab to open one. Send-to-bar does NOT need a shift.
+Future<bool> _ensureShiftOpen(BuildContext context) async {
+  final shiftCtl = context.read<ShiftController>();
+  if (shiftCtl.hasOpenShift) return true;
+  // Maybe not loaded yet — refresh once before blocking the cashier.
+  if (!shiftCtl.loaded || shiftCtl.shift == null) {
+    await shiftCtl.load(silent: true);
+  }
+  if (!context.mounted) return false;
+  if (shiftCtl.hasOpenShift) return true;
+  context.shell.closeSheet();
+  context.read<AppState>().setCashTab('shift');
+  context.shell.toast('Bạn chưa mở ca — mở ca để thu tiền', 'clock');
+  return false;
+}
+
 /// Open payment: create the real DRAFT bill first (so vouchers can apply and
 /// the sheet shows the server total), then show the pay sheet.
 Future<void> openPay(BuildContext context, int total) async {
+  if (!await _ensureShiftOpen(context)) return;
+  if (!context.mounted) return;
   final state = context.read<AppState>();
   final repo = context.read<BillRepository>();
   final items = state.cartAsBillItems();
@@ -401,6 +556,164 @@ Future<void> openPay(BuildContext context, int total) async {
     if (!context.mounted) return;
     state.setCheckoutBusy(false);
     context.shell.toast('Lỗi mở thanh toán. Thử lại.', 'edit');
+  }
+}
+
+/// "Gửi Bar, thu tiền sau": create the bill, push it to the bar/KDS, then keep
+/// it as the pending bill so the cashier can collect later. Take-away only.
+Future<void> sendToBarCart(BuildContext context) async {
+  final state = context.read<AppState>();
+  final repo = context.read<BillRepository>();
+  final items = state.cartAsBillItems();
+  if (items.isEmpty) {
+    context.shell.toast('Không gửi được (món thiếu mã)', 'edit');
+    return;
+  }
+  state.setCheckoutBusy(true);
+  try {
+    final bill = await repo.createBill(serviceType: 'TAKE_AWAY', items: items);
+    await repo.sendToBar(bill.id);
+    Bill full = bill;
+    try {
+      full = await repo.getBill(bill.id);
+    } catch (_) {/* fall back to the create response */}
+    if (!context.mounted) return;
+    state.clearAfterCheckout();
+    state.setPendingBill(full);
+    context.shell.closeSheet();
+    context.shell.toast('Đã gửi Bar · ${full.billCode} — chờ thanh toán', 'check');
+  } on ApiException catch (e) {
+    if (!context.mounted) return;
+    state.setCheckoutBusy(false);
+    context.shell.toast(e.message, 'edit');
+  } catch (_) {
+    if (!context.mounted) return;
+    state.setCheckoutBusy(false);
+    context.shell.toast('Lỗi gửi Bar. Thử lại.', 'edit');
+  }
+}
+
+/// Open the pay sheet for an EXISTING bill (a pending "thu sau" bill or one from
+/// the unpaid list). [sent] = already on the bar, so don't re-send after paying.
+Future<void> openPayForBill(BuildContext context, Bill bill, {bool sent = true}) async {
+  if (!await _ensureShiftOpen(context)) return;
+  if (!context.mounted) return;
+  final state = context.read<AppState>();
+  final repo = context.read<BillRepository>();
+  state.openPay(bill.grandTotal);
+  Bill full = bill;
+  try {
+    full = await repo.getBill(bill.id);
+  } catch (_) {/* use what we have */}
+  if (!context.mounted) return;
+  state.setPayBill(full, sent: sent);
+  context.shell.showSheet((_) => const _PaySheet());
+}
+
+/// Unpaid bills (current + earlier shifts) — tap one to collect payment.
+void openUnpaidBills(BuildContext context) {
+  context.shell.showSheet((_) => const _UnpaidBillsSheet());
+}
+
+class _UnpaidBillsSheet extends StatefulWidget {
+  const _UnpaidBillsSheet();
+  @override
+  State<_UnpaidBillsSheet> createState() => _UnpaidBillsSheetState();
+}
+
+class _UnpaidBillsSheetState extends State<_UnpaidBillsSheet> {
+  late Future<List<Bill>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = context.read<BillRepository>().unpaidBills();
+  }
+
+  void _reload() => setState(() => _future = context.read<BillRepository>().unpaidBills());
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return AppSheet(
+      title: 'Đơn chưa thanh toán',
+      headerExtra: [
+        GestureDetector(
+          onTap: _reload,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(color: p.cream2, borderRadius: BorderRadius.circular(10)),
+            child: Text('Tải lại', style: AppType.body(size: 13, weight: FontWeight.w800, color: p.ink2)),
+          ),
+        ),
+      ],
+      body: FutureBuilder<List<Bill>>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (snap.hasError) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 30),
+              child: Center(
+                child: Text('Không tải được danh sách', style: AppType.body(size: 14, weight: FontWeight.w600, color: p.muted)),
+              ),
+            );
+          }
+          final bills = snap.data ?? const [];
+          if (bills.isEmpty) {
+            return const EmptyState(emoji: '☕', title: 'Không có đơn chờ thu', sub: 'Mọi đơn đã được thanh toán');
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final b in bills) _billRow(context, b, p),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _billRow(BuildContext context, Bill b, Palette p) {
+    return GestureDetector(
+      onTap: () {
+        context.shell.closeSheet();
+        openPayForBill(context, b, sent: true);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          color: p.paper,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: p.line),
+        ),
+        child: Row(children: [
+          LeadIcon(icon: b.isDineIn ? 'table' : 'coffee'),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              Row(children: [
+                Text(b.billCode, style: AppType.body(size: 14.5, weight: FontWeight.w800, color: p.ink)),
+                const SizedBox(width: 8),
+                AppBadge(b.isDineIn ? 'Tại bàn' : 'Mang đi', color: b.isDineIn ? BadgeColor.amber : BadgeColor.blue),
+              ]),
+              const SizedBox(height: 4),
+              Text('${b.itemCount} món · ${b.status == 'SENT_TO_BAR_UNPAID' ? 'đã gửi Bar' : 'chờ thu'}',
+                  style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
+            ]),
+          ),
+          Text(vnd(b.grandTotal), style: AppType.body(size: 15, weight: FontWeight.w800, color: p.terracotta)),
+          const SizedBox(width: 6),
+          Icon(Icons.chevron_right_rounded, size: 20, color: p.faint),
+        ]),
+      ),
+    );
   }
 }
 
@@ -671,9 +984,17 @@ class _PaySheetState extends State<_PaySheet> {
       context.shell.toast('Chưa có hoá đơn. Thử lại.', 'edit');
       return;
     }
+    final alreadySent = state.payBillSent;
     state.setCheckoutBusy(true);
     try {
       final paid = await repo.payCash(bill.id, received: received);
+      // Direct pay (cart → checkout): push to the bar so it reaches the KDS.
+      // Pending/unpaid bills are already on the bar — don't re-send.
+      if (!alreadySent) {
+        try {
+          await repo.sendToBar(bill.id);
+        } catch (_) {/* paid OK; bar can be retried from the bar screen */}
+      }
       Bill full = paid;
       try {
         full = await repo.getBill(paid.id);
@@ -795,8 +1116,14 @@ class _QrPaySheetState extends State<_QrPaySheet> {
     setState(() => _busy = true);
     final repo = context.read<BillRepository>();
     final state = context.read<AppState>();
+    final alreadySent = state.payBillSent;
     try {
       final paid = await repo.confirmPayment(widget.qr.paymentId);
+      if (!alreadySent) {
+        try {
+          await repo.sendToBar(paid.id);
+        } catch (_) {/* paid OK; bar can be retried from the bar screen */}
+      }
       Bill full = paid;
       try {
         full = await repo.getBill(paid.id);

@@ -35,6 +35,15 @@ class BillRepository {
     return Bill.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
+  /// Push a bill to the bar/KDS for preparation — POST /pos/bills/{id}/send-to-bar.
+  /// Done after payment (so paid orders reach the bar) and for the "Gửi Bar,
+  /// thu tiền sau" flow. Best-effort: callers may ignore failures.
+  Future<void> sendToBar(String billId) => api.post('/pos/bills/$billId/send-to-bar');
+
+  /// Hold / resume a bill — POST /pos/bills/{id}/hold | /resume.
+  Future<void> holdBill(String billId) => api.post('/pos/bills/$billId/hold');
+  Future<void> resumeBill(String billId) => api.post('/pos/bills/$billId/resume');
+
   /// Pay a bill in cash — POST /pos/bills/{id}/payments/cash.
   Future<Bill> payCash(String billId, {required int received, int? amount}) async {
     final data = await api.post('/pos/bills/$billId/payments/cash', body: {
@@ -74,6 +83,16 @@ class BillRepository {
     final data = await api.delete('/pos/bills/$billId/voucher');
     return _billFrom(data);
   }
+
+  /// Request to VOID an unpaid bill — POST /pos/bills/{id}/void-request {reason}.
+  /// Creates a request a Manager must approve (perm bill.void_request).
+  Future<void> voidRequest(String billId, String reason) =>
+      api.post('/pos/bills/$billId/void-request', body: {'reason': reason});
+
+  /// Request to REFUND a paid bill — POST /pos/bills/{id}/refund-request
+  /// {amount, reason}. Creates a request a Manager must approve.
+  Future<void> refundRequest(String billId, {required int amount, required String reason}) =>
+      api.post('/pos/bills/$billId/refund-request', body: {'amount': amount, 'reason': reason});
 
   /// Full bill (with line items) — GET /pos/bills/{id}. Used for receipts.
   Future<Bill> getBill(String billId) async {

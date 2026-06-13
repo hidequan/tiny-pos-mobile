@@ -38,6 +38,25 @@ class TableRepository {
     });
   }
 
+  /// Move a session to an empty table — POST transfer {toTableId}.
+  Future<void> transfer(String sessionId, String toTableId) =>
+      api.post('/pos/table-sessions/$sessionId/transfer', body: {'toTableId': toTableId});
+
+  /// Merge another open session INTO this one — POST merge {sourceSessionId,
+  /// mergeBills}. When [mergeBills] is true the unpaid bills are also merged.
+  Future<void> mergeTable(String sessionId, String sourceSessionId, {bool mergeBills = false}) =>
+      api.post('/pos/table-sessions/$sessionId/merge',
+          body: {'sourceSessionId': sourceSessionId, 'mergeBills': mergeBills});
+
+  /// Merge ≥2 unpaid bills in a session into one — POST merge-bills {billIds}.
+  Future<void> mergeBills(String sessionId, List<String> billIds) =>
+      api.post('/pos/table-sessions/$sessionId/merge-bills', body: {'billIds': billIds});
+
+  /// Split selected items/quantities off a bill into a new bill — POST
+  /// split-bill {billId, items:[{billItemId, quantity}]}.
+  Future<void> splitBill(String sessionId, String billId, List<Map<String, dynamic>> items) =>
+      api.post('/pos/table-sessions/$sessionId/split-bill', body: {'billId': billId, 'items': items});
+
   /// Close a session (all bills must be settled) — POST close.
   Future<void> close(String sessionId) => api.post('/pos/table-sessions/$sessionId/close');
 

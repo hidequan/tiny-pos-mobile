@@ -19,6 +19,11 @@ class KdsController extends ChangeNotifier {
   Timer? _poll;
   final Set<String> _busyItems = {};
 
+  // Completed (SERVED) tickets for the "Đã hoàn thành" tab — loaded on demand.
+  List<KdsTicket> served = [];
+  bool servedLoading = false;
+  String? servedError;
+
   bool itemBusy(String id) => _busyItems.contains(id);
 
   Future<void> load({bool silent = false}) async {
@@ -63,11 +68,35 @@ class KdsController extends ChangeNotifier {
     await load(silent: true);
   }
 
+  /// Begin preparing a whole ticket (WAITING → PREPARING).
+  Future<void> startTicket(String ticketId) async {
+    try {
+      await repo.startTicket(ticketId);
+    } catch (_) {/* surfaced on next poll */}
+    await load(silent: true);
+  }
+
   Future<void> bumpTicket(String ticketId) async {
     try {
       await repo.completeTicket(ticketId);
     } catch (_) {}
     await load(silent: true);
+  }
+
+  /// Load today's completed (SERVED) tickets for the Done tab.
+  Future<void> loadServed() async {
+    servedLoading = true;
+    servedError = null;
+    notifyListeners();
+    try {
+      served = await repo.tickets(status: 'SERVED');
+    } on ApiException catch (e) {
+      servedError = e.message;
+    } catch (_) {
+      servedError = 'Không tải được đơn đã hoàn thành';
+    }
+    servedLoading = false;
+    notifyListeners();
   }
 
   @visibleForTesting

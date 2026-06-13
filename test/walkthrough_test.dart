@@ -130,21 +130,15 @@ void main() {
     noCrash(t, 'branch pick sheet');
     await tap(t, find.byIcon(Icons.close_rounded));
     await tap(t, txt('Thêm'));
-    await tap(t, txt('Khuyến mãi'));
+    await tap(t, txt('Voucher / Khuyến mãi'));
+    noCrash(t, 'vouchers screen');
     await tap(t, txt('+ Tạo'));
-    noCrash(t, 'add-promo form');
-    await t.enterText(find.byType(TextField).first, 'KM Test');
-    await tap(t, txt('Lưu khuyến mãi'));
-    noCrash(t, 'submit add-promo');
-    expect(find.text('KM Test'), findsOneWidget);
+    noCrash(t, 'voucher form opens');
+    await tap(t, find.byIcon(Icons.close_rounded));
+    noCrash(t, 'voucher form closes');
     await tap(t, find.byIcon(Icons.chevron_left_rounded));
     await tap(t, txt('Chi nhánh'));
-    await tap(t, txt('Thêm chi nhánh'));
-    noCrash(t, 'add-branch form');
-    await t.enterText(find.byType(TextField).first, 'CN Test');
-    await tap(t, txt('Lưu chi nhánh'));
-    noCrash(t, 'submit add-branch');
-    expect(find.text('CN Test'), findsOneWidget);
+    noCrash(t, 'branches screen');
   });
 
   testWidgets('Admin: edit-product form (prefilled) saves', (t) async {

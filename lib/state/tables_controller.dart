@@ -109,6 +109,42 @@ class TablesController extends ChangeNotifier {
   Future<TableSessionDetail> sessionDetail(String sessionId) =>
       repo.sessionDetail(sessionId);
 
+  // ---- advanced dine-in ops (return error message, or null on success) -----
+  Future<String?> _op(Future<void> Function() run, String fallback) async {
+    String? err;
+    try {
+      await run();
+    } on ApiException catch (e) {
+      err = e.message;
+    } catch (_) {
+      err = fallback;
+    }
+    await load(silent: true);
+    return err;
+  }
+
+  Future<String?> transferTable(String sessionId, String toTableId) =>
+      _op(() => repo.transfer(sessionId, toTableId), 'Không chuyển được bàn');
+
+  Future<String?> mergeTable(String sessionId, String sourceSessionId, {bool mergeBills = false}) =>
+      _op(() => repo.mergeTable(sessionId, sourceSessionId, mergeBills: mergeBills), 'Không ghép được bàn');
+
+  Future<String?> mergeBillsOp(String sessionId, List<String> billIds) =>
+      _op(() => repo.mergeBills(sessionId, billIds), 'Không gộp được bill');
+
+  Future<String?> splitBill(String sessionId, String billId, List<Map<String, dynamic>> items) =>
+      _op(() => repo.splitBill(sessionId, billId, items), 'Không tách được bill');
+
+  /// Empty tables (transfer targets).
+  List<CafeTable> emptyTables() =>
+      areas.expand((a) => a.tables).where((t) => t.isEmpty).toList();
+
+  /// Other open sessions (merge sources) — every occupied table except [exceptSessionId].
+  List<CafeTable> otherOpenTables(String exceptSessionId) => areas
+      .expand((a) => a.tables)
+      .where((t) => t.session != null && t.session!.id != exceptSessionId)
+      .toList();
+
   void setActive(String sessionId, String tableLabel) {
     activeSessionId = sessionId;
     activeTableLabel = tableLabel;

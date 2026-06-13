@@ -16,13 +16,20 @@ class AdminMoreScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final p = context.palette;
-    final activePromos = state.promos.where((x) => x.on).length;
 
     final items = [
+      ['receipt', const Color(0xFFFDE7E1), p.terracotta, 'Duyệt huỷ / hoàn', 'Yêu cầu từ thu ngân', 'voidrefund'],
+      ['book', const Color(0xFFE9EFE2), p.greenD, 'Đơn hàng', 'Xem & lọc mọi hoá đơn', 'adminbills'],
       ['users', const Color(0xFFFCE8DF), p.terracotta, 'Nhân viên & phân quyền', '${state.staff.length} người · RBAC', 'staff'],
-      ['gift', const Color(0xFFEFE6F7), const Color(0xFF7A4FB0), 'Khuyến mãi', '$activePromos đang chạy', 'promos'],
+      ['gift', const Color(0xFFEFE6F7), const Color(0xFF7A4FB0), 'Voucher / Khuyến mãi', 'Mã giảm giá', 'promos'],
+      ['book', p.cream2, p.caramel, 'Cấu hình Menu', 'Danh mục · Size · Topping', 'menuconfig'],
+      ['table', p.blueBg, const Color(0xFF3E6E8E), 'Khu vực & Bàn', 'Sơ đồ bàn dine-in', 'tablesadmin'],
       ['store', p.greenBg, p.greenD, 'Chi nhánh', '${state.branches.length} cửa hàng', 'branches'],
+      ['cash', p.greenBg, p.greenD, 'Sổ quỹ ca', 'Dòng tiền ra / vào · duyệt rút quỹ', 'cashflow'],
       ['clock', p.amberBg, p.amber, 'Ca làm việc', 'Quản lý lịch & đối soát', 'shiftadmin'],
+      ['print', p.cream2, p.espresso, 'Thiết bị & Máy in', 'Máy in · két tiền · định tuyến', 'hardware'],
+      ['receipt', p.cream2, p.ink2, 'Audit log', 'Nhật ký thao tác toàn hệ thống', 'audit'],
+      ['layers', p.blueBg, const Color(0xFF3E6E8E), 'Giám sát đồng bộ', 'Thiết bị & conflict', 'syncmonitor'],
       ['settings', p.cream2, p.espresso, 'Cài đặt hệ thống', 'Thuế, in bill, thiết bị', 'settings'],
     ];
 

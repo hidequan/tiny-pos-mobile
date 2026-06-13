@@ -29,7 +29,8 @@ import 'package:tiny_pos_mobile/models/shift.dart';
 class FakeKdsRepository extends KdsRepository {
   FakeKdsRepository(super.api);
   @override
-  Future<List<KdsTicket>> tickets() async => _fakeTickets();
+  Future<List<KdsTicket>> tickets({String? status}) async =>
+      status == 'SERVED' ? const [] : _fakeTickets();
   @override
   Future<KdsStats> stats() async => KdsStats(1, 1, 3);
   @override

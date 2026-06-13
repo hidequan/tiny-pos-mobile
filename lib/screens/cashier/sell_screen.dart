@@ -5,6 +5,7 @@ import '../../state/app_state.dart';
 import '../../state/session.dart';
 import '../../state/menu_controller.dart';
 import '../../models/menu.dart';
+import '../../models/bill.dart';
 import '../../data/seed.dart' show vnd;
 import '../../theme/palette.dart';
 import '../../theme/typography.dart';
@@ -38,6 +39,12 @@ class SellScreen extends StatelessWidget {
           title: 'Bán hàng',
           subtitle: Text(sub, style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
           actions: [
+            IconBtn('book',
+                dot: state.drafts.isNotEmpty,
+                onTap: () => openDrafts(context)),
+            IconBtn('receipt',
+                dot: state.pendingBill != null,
+                onTap: () => openUnpaidBills(context)),
             IconBtn('scan', onTap: () => context.shell.toast('Quét mã vạch sản phẩm', 'scan')),
             Avatar(_initials(context), onTap: () => openProfile(context)),
           ],
@@ -92,7 +99,10 @@ class SellScreen extends StatelessWidget {
                   itemCount: products.length,
                   itemBuilder: (_, i) => _ProductCard(product: products[i]),
                 ),
-              if (state.cartCount > 0) Positioned(left: 12, right: 12, bottom: 12, child: _CartBar(state: state)),
+              if (state.cartCount > 0)
+                Positioned(left: 12, right: 12, bottom: 12, child: _CartBar(state: state))
+              else if (state.pendingBill != null)
+                Positioned(left: 12, right: 12, bottom: 12, child: _PendingBar(bill: state.pendingBill!)),
             ],
           ),
         ),
@@ -186,6 +196,60 @@ class _ProductCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Bottom banner for a take-away bill that was sent to the bar and is awaiting
+/// payment ("Gửi Bar, thu sau"). Tap "Thu tiền" to collect, ✕ to hide (the bill
+/// stays in "Đơn chưa trả").
+class _PendingBar extends StatelessWidget {
+  final Bill bill;
+  const _PendingBar({required this.bill});
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: p.espresso,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [BoxShadow(color: Color(0x47281206), blurRadius: 50, offset: Offset(0, 18))],
+      ),
+      child: Row(children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(color: p.amber.withValues(alpha: 0.22), borderRadius: BorderRadius.circular(11)),
+          alignment: Alignment.center,
+          child: Icon(Icons.local_cafe_outlined, size: 18, color: p.amber),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text('Đã gửi Bar · ${bill.billCode}',
+                style: AppType.body(size: 14, weight: FontWeight.w800, color: Colors.white)),
+            Text('Chờ thu ${vnd(bill.grandTotal)}',
+                style: AppType.body(size: 12, weight: FontWeight.w500, color: Colors.white.withValues(alpha: 0.7))),
+          ]),
+        ),
+        GestureDetector(
+          onTap: () => context.read<AppState>().setPendingBill(null),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Icon(Icons.close_rounded, size: 18, color: Colors.white.withValues(alpha: 0.6)),
+          ),
+        ),
+        const SizedBox(width: 4),
+        GestureDetector(
+          onTap: () => openPayForBill(context, bill, sent: true),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            decoration: BoxDecoration(color: p.terracotta, borderRadius: BorderRadius.circular(12)),
+            child: Text('Thu tiền', style: AppType.body(size: 14, weight: FontWeight.w800, color: Colors.white)),
+          ),
+        ),
+      ]),
     );
   }
 }

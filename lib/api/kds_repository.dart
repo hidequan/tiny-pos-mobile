@@ -6,8 +6,8 @@ class KdsRepository {
   final ApiClient api;
   KdsRepository(this.api);
 
-  Future<List<KdsTicket>> tickets() async {
-    final data = await api.get('/kds/tickets');
+  Future<List<KdsTicket>> tickets({String? status}) async {
+    final data = await api.get('/kds/tickets', query: status != null ? {'status': status} : null);
     final list = data is List ? data : ((data as Map)['items'] ?? (data)['tickets'] ?? []) as List;
     return list.map((e) => KdsTicket.fromJson(e as Map)).toList();
   }
