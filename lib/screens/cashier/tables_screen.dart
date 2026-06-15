@@ -387,9 +387,10 @@ class _SessionDetailSheetState extends State<_SessionDetailSheet> {
   }
 
   void _pay(Bill b) {
-    // Reuse the full pay sheet (voucher + cash/QR). Dine-in items are sent to
-    // the bar via "Gửi Bar", so suppress the post-pay auto-send (sent: true).
-    context.shell.closeSheet();
+    // Reuse the full pay sheet (voucher + cash/QR). openPayForBill captures the
+    // shell up front and its showSheet REPLACES this session sheet — don't close
+    // first (closing unmounts the context and the pay sheet never opened: #6).
+    // Dine-in items are sent to the bar via "Gửi Bar" → suppress re-send (sent:true).
     openPayForBill(context, b, sent: true);
   }
 

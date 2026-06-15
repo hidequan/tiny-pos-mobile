@@ -100,10 +100,16 @@ class BillRepository {
     return Bill.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
-  Future<List<Bill>> listBills() async {
-    final data = await api.get('/pos/bills');
-    final list = data is List ? data : ((data as Map)['items'] ?? (data)['data'] ?? []) as List;
-    return list.map((e) => Bill.fromJson(e as Map)).toList();
+  Future<List<Bill>> listBills() async => (await listBillsPaged(limit: 50)).items;
+
+  /// Paged bill history — GET /pos/bills?page=&limit=. Returns items + total
+  /// so the Orders screen can offer "Tải thêm".
+  Future<({List<Bill> items, int total})> listBillsPaged({int page = 1, int limit = 20}) async {
+    final data = await api.get('/pos/bills', query: {'page': '$page', 'limit': '$limit'});
+    final m = data is Map ? Map<String, dynamic>.from(data) : const <String, dynamic>{};
+    final list = data is List ? data : (m['items'] ?? m['data'] ?? const []) as List;
+    final total = ((m['pagination'] as Map?)?['total'] ?? m['total']) as num?;
+    return (items: list.map((e) => Bill.fromJson(e as Map)).toList(), total: total?.toInt() ?? list.length);
   }
 
   Future<List<Bill>> unpaidBills() async {

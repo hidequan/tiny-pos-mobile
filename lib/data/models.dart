@@ -101,6 +101,8 @@ class CartLine {
   final String station; // 'bar' | 'kitchen'
   final String? variantId; // API variant (for real bill creation)
   final List<String> toppingIds;
+  final int? sugar; // % level for the API (0/30/50/70/100)
+  final int? ice; // % level for the API
   CartLine({
     required this.lid,
     required this.pid,
@@ -112,6 +114,8 @@ class CartLine {
     required this.station,
     this.variantId,
     this.toppingIds = const [],
+    this.sugar,
+    this.ice,
   });
 
   Map<String, dynamic> toJson() => {
@@ -125,6 +129,8 @@ class CartLine {
         'station': station,
         'variantId': ?variantId,
         'toppingIds': toppingIds,
+        'sugar': ?sugar,
+        'ice': ?ice,
       };
 
   factory CartLine.fromJson(Map<String, dynamic> j) => CartLine(
@@ -140,6 +146,8 @@ class CartLine {
         toppingIds: ((j['toppings'] as List?) ?? (j['toppingIds'] as List?) ?? const [])
             .map((e) => e.toString())
             .toList(),
+        sugar: (j['sugar'] as num?)?.toInt(),
+        ice: (j['ice'] as num?)?.toInt(),
       );
 }
 

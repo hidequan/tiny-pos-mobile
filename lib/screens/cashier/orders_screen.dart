@@ -6,6 +6,7 @@ import '../../state/bills_controller.dart';
 import '../../api/api_client.dart';
 import '../../api/bill_repository.dart';
 import '../../models/bill.dart';
+import '../../services/receipt.dart';
 import '../../data/seed.dart' show vnd;
 import '../../theme/palette.dart';
 import '../../theme/typography.dart';
@@ -86,13 +87,20 @@ class OrdersScreen extends StatelessWidget {
         const SizedBox(height: 6),
         if (shown.isEmpty)
           const EmptyState(emoji: '🧾', title: 'Chưa có đơn', sub: 'Đơn mới sẽ hiện ở đây')
-        else
+        else ...[
           CardBox(
             margin: const EdgeInsets.symmetric(horizontal: 16),
             clip: true,
             padding: EdgeInsets.zero,
             child: RowList([for (final b in shown) _row(context, b)]),
           ),
+          if (q.isEmpty && ctl.hasMore)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: AppButton(ctl.loadingMore ? 'Đang tải…' : 'Tải thêm', icon: 'history', block: true,
+                  variant: BtnVariant.ghost, enabled: !ctl.loadingMore, onTap: () => ctl.loadMore()),
+            ),
+        ],
       ],
     );
   }
@@ -210,6 +218,12 @@ class _BillActionSheetState extends State<_BillActionSheet> {
               ),
             ]),
           ),
+          if (b.items.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: AppButton('In lại bill', icon: 'print', block: true, variant: BtnVariant.ghost,
+                  onTap: () => _printBill(context, b)),
+            ),
           if (!canAct)
             Padding(
               padding: const EdgeInsets.only(top: 14),
@@ -312,6 +326,14 @@ class _BillActionSheetState extends State<_BillActionSheet> {
       if (!context.mounted) return;
       setState(() => _busy = false);
       context.shell.toast('Gửi yêu cầu thất bại. Thử lại.', 'edit');
+    }
+  }
+
+  Future<void> _printBill(BuildContext context, Bill b) async {
+    try {
+      await ReceiptService.printReceipt(b, method: b.isPaid ? 'cash' : '', received: 0);
+    } catch (_) {
+      if (context.mounted) context.shell.toast('Không mở được bản in', 'edit');
     }
   }
 

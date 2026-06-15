@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -303,6 +304,10 @@ class _CartSheet extends StatelessWidget {
             if (!dineIn)
               GestureDetector(
                 onTap: () {
+                  if (state.cart.isEmpty) {
+                    context.shell.toast('Giỏ trống — chưa có món để lưu nháp', 'edit');
+                    return;
+                  }
                   state.parkDraft();
                   context.shell.closeSheet();
                   context.shell.toast('Đã lưu đơn nháp — bắt đầu đơn mới', 'check');
@@ -510,52 +515,33 @@ class _CartSheet extends StatelessWidget {
   }
 }
 
-/// Payment requires an OPEN shift (the backend rejects cash payment otherwise:
-/// "Bạn chưa mở ca"). Mirrors the web requireShift gate — block + send the
-/// cashier to the shift tab to open one. Send-to-bar does NOT need a shift.
-Future<bool> _ensureShiftOpen(BuildContext context) async {
-  final shiftCtl = context.read<ShiftController>();
-  if (shiftCtl.hasOpenShift) return true;
-  // Maybe not loaded yet — refresh once before blocking the cashier.
-  if (!shiftCtl.loaded || shiftCtl.shift == null) {
-    await shiftCtl.load(silent: true);
-  }
-  if (!context.mounted) return false;
-  if (shiftCtl.hasOpenShift) return true;
-  context.shell.closeSheet();
-  context.read<AppState>().setCashTab('shift');
-  context.shell.toast('Bạn chưa mở ca — mở ca để thu tiền', 'clock');
-  return false;
-}
-
-/// Open payment: create the real DRAFT bill first (so vouchers can apply and
-/// the sheet shows the server total), then show the pay sheet.
+/// Open payment: create the real DRAFT bill first (so vouchers can apply and the
+/// sheet shows the server total), then show the pay sheet. Payment needs an OPEN
+/// shift (backend rejects cash otherwise) — gate + route to the shift tab.
 Future<void> openPay(BuildContext context, int total) async {
-  if (!await _ensureShiftOpen(context)) return;
-  if (!context.mounted) return;
+  final shell = context.shell;
   final state = context.read<AppState>();
   final repo = context.read<BillRepository>();
+  final shiftCtl = context.read<ShiftController>();
   final items = state.cartAsBillItems();
   if (items.isEmpty) {
-    context.shell.toast('Không tạo được hoá đơn (món thiếu mã)', 'edit');
+    shell.toast('Không tạo được hoá đơn (món thiếu mã)', 'edit');
     return;
   }
+  if (!await _ensureShiftOpenRefs(shell, state, shiftCtl)) return;
   state.openPay(total);
   state.setCheckoutBusy(true);
   try {
     final bill = await repo.createBill(serviceType: 'TAKE_AWAY', items: items);
-    if (!context.mounted) return;
     state.setCheckoutBusy(false);
     state.setPayBill(bill);
-    context.shell.showSheet((_) => const _PaySheet());
+    shell.showSheet((_) => const _PaySheet());
   } on ApiException catch (e) {
-    if (!context.mounted) return;
     state.setCheckoutBusy(false);
-    context.shell.toast(e.message, 'edit');
+    shell.toast(e.message, 'edit');
   } catch (_) {
-    if (!context.mounted) return;
     state.setCheckoutBusy(false);
-    context.shell.toast('Lỗi mở thanh toán. Thử lại.', 'edit');
+    shell.toast('Lỗi mở thanh toán. Thử lại.', 'edit');
   }
 }
 
@@ -594,20 +580,33 @@ Future<void> sendToBarCart(BuildContext context) async {
 }
 
 /// Open the pay sheet for an EXISTING bill (a pending "thu sau" bill or one from
-/// the unpaid list). [sent] = already on the bar, so don't re-send after paying.
+/// the unpaid list / a table bill). [sent] = already on the bar, so don't
+/// re-send after paying. Captures the shell + providers up front so it still
+/// opens even when the caller's sheet (e.g. the table detail) closes mid-flow.
 Future<void> openPayForBill(BuildContext context, Bill bill, {bool sent = true}) async {
-  if (!await _ensureShiftOpen(context)) return;
-  if (!context.mounted) return;
+  final shell = context.shell;
   final state = context.read<AppState>();
   final repo = context.read<BillRepository>();
+  final shiftCtl = context.read<ShiftController>();
+  if (!await _ensureShiftOpenRefs(shell, state, shiftCtl)) return;
   state.openPay(bill.grandTotal);
   Bill full = bill;
   try {
     full = await repo.getBill(bill.id);
   } catch (_) {/* use what we have */}
-  if (!context.mounted) return;
   state.setPayBill(full, sent: sent);
-  context.shell.showSheet((_) => const _PaySheet());
+  shell.showSheet((_) => const _PaySheet());
+}
+
+/// Shift gate using captured refs (safe across awaits / sheet swaps).
+Future<bool> _ensureShiftOpenRefs(ShellController shell, AppState state, ShiftController shiftCtl) async {
+  if (shiftCtl.hasOpenShift) return true;
+  if (!shiftCtl.loaded || shiftCtl.shift == null) await shiftCtl.load(silent: true);
+  if (shiftCtl.hasOpenShift) return true;
+  shell.closeSheet();
+  state.setCashTab('shift');
+  shell.toast('Bạn chưa mở ca — mở ca để thu tiền', 'clock');
+  return false;
 }
 
 /// Unpaid bills (current + earlier shifts) — tap one to collect payment.
@@ -725,11 +724,13 @@ class _PaySheet extends StatefulWidget {
 
 class _PaySheetState extends State<_PaySheet> {
   final TextEditingController _voucher = TextEditingController();
+  final TextEditingController _receivedCtl = TextEditingController();
   bool _voucherBusy = false;
 
   @override
   void dispose() {
     _voucher.dispose();
+    _receivedCtl.dispose();
     super.dispose();
   }
 
@@ -777,10 +778,32 @@ class _PaySheetState extends State<_PaySheet> {
               if (state.payMethod == 'cash') ...[
                 const SizedBox(height: 6),
                 Text('Tiền khách đưa', style: AppType.body(size: 13, weight: FontWeight.w800, color: p.ink2)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _receivedCtl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(12)],
+                  style: AppType.body(size: 18, weight: FontWeight.w800, color: p.ink),
+                  decoration: InputDecoration(
+                    hintText: 'Nhập số tiền…',
+                    hintStyle: AppType.body(size: 16, weight: FontWeight.w500, color: p.faint),
+                    suffixText: 'đ',
+                    filled: true,
+                    fillColor: p.paper,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: p.line2, width: 1.5)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: p.caramel, width: 1.5)),
+                  ),
+                  onChanged: (v) => state.setReceived(int.tryParse(v) ?? 0),
+                ),
                 const SizedBox(height: 10),
                 Wrap(spacing: 8, runSpacing: 8, children: [
                   for (final v in quick)
-                    OptionPill(label: vnd(v), on: state.received == v, onTap: () => state.setReceived(v)),
+                    OptionPill(label: vnd(v), on: state.received == v, onTap: () {
+                      state.setReceived(v);
+                      _receivedCtl.text = '$v';
+                      _receivedCtl.selection = TextSelection.collapsed(offset: _receivedCtl.text.length);
+                    }),
                 ]),
                 if (state.received > 0) ...[
                   const SizedBox(height: 12),

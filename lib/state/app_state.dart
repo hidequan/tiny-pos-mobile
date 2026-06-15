@@ -221,12 +221,19 @@ class AppState extends ChangeNotifier {
 
   /// Bridge a REAL menu product (from /pos/menu) into the local cart, so the
   /// existing cart/payment UI works while the bill-write API layer lands next.
+  /// Max units of a single line (mirrors the web MAX_ITEM_QTY).
+  static const int maxItemQty = 99;
+
   void addMenuFromApi(
     MenuProduct p, {
     ProductVariant? variant,
     List<MenuTopping> toppings = const [],
     String note = '',
     int qty = 1,
+    int? sugar,
+    String? sugarLabel,
+    int? ice,
+    String? iceLabel,
   }) {
     final extra = toppings.fold<int>(0, (a, t) => a + t.price);
     final unit = (variant?.price ?? p.basePrice) + extra;
@@ -236,9 +243,11 @@ class AppState extends ChangeNotifier {
       name: p.name,
       emoji: '🥤',
       price: unit,
-      qty: qty,
+      qty: qty.clamp(1, maxItemQty),
       mods: ModSel(
         size: variant?.sizeName,
+        sugar: sugarLabel,
+        ice: iceLabel,
         tops: toppings.map((t) => t.name).toList(),
         note: note,
         extra: extra,
@@ -246,6 +255,8 @@ class AppState extends ChangeNotifier {
       station: 'bar',
       variantId: variant?.id,
       toppingIds: toppings.map((t) => t.id).toList(),
+      sugar: sugar,
+      ice: ice,
     ));
     _save();
     notifyListeners();
@@ -259,6 +270,8 @@ class AppState extends ChangeNotifier {
               variantId: c.variantId!,
               quantity: c.qty,
               toppingIds: c.toppingIds,
+              sugar: c.sugar,
+              ice: c.ice,
               note: c.mods.note.isEmpty ? null : c.mods.note,
             ),
       ];
@@ -280,8 +293,12 @@ class AppState extends ChangeNotifier {
 
   void cartQty(String lid, int d) {
     final c = cart.firstWhere((x) => x.lid == lid);
-    c.qty += d;
-    if (c.qty <= 0) cart.removeWhere((x) => x.lid == lid);
+    final next = c.qty + d;
+    if (next <= 0) {
+      cart.removeWhere((x) => x.lid == lid);
+    } else {
+      c.qty = next.clamp(1, maxItemQty);
+    }
     _save();
     notifyListeners();
   }
