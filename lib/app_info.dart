@@ -10,6 +10,6 @@ class AppInfo {
 
   /// Developer / company name (shown on the store listing & privacy policy).
   static const String developer = 'LP Tech';
-  static const String supportEmail = 'support@lptech.vn';
+  static const String supportEmail = 'hidequan@gmail.com';
   static const String privacyUrl = 'https://hidequan.github.io/tiny-pos-privacy/';
 }

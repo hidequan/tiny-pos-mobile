@@ -17,7 +17,7 @@ Tài sản đã chuẩn bị sẵn (trong repo) ✅ · Việc cần tài khoản
 - ✅ Data Safety (Play) + App Privacy (iOS): **Data Collected** (tài khoản + dữ liệu vận hành,
   truyền qua HTTPS) — `docs/store/data-safety.md`
 - ✅ `ITSAppUsesNonExemptEncryption=false` đã thêm vào iOS Info.plist
-- ✅ Nhà phát triển **LP Tech** · hỗ trợ **support@lptech.vn** (lỗi 1.5 Developer Information)
+- ✅ Nhà phát triển **LP Tech** · hỗ trợ **hidequan@gmail.com** (lỗi 1.5 Developer Information)
 
 ## Google Play (⏳ cần tài khoản Play Developer $25)
 1. Tạo app trong Play Console → điền: tên, mô tả, danh mục Business, email, **privacy URL**.

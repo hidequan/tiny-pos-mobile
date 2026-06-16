@@ -2,7 +2,7 @@
 
 _Cập nhật lần cuối: 16/06/2026 · Last updated: 2026-06-16_
 
-**Nhà phát triển / Developer:** LP Tech · **Liên hệ / Contact:** support@lptech.vn
+**Nhà phát triển / Developer:** LP Tech · **Liên hệ / Contact:** hidequan@gmail.com
 
 ## Tiếng Việt
 
@@ -30,9 +30,9 @@ vì mục đích quảng cáo. Không có tracking quảng cáo.
 thể thu thập thông tin thiết bị của tester (loại máy, phiên bản OS) để phân phối bản cài.
 
 **Lưu trữ & xoá dữ liệu:** Gỡ cài đặt ứng dụng sẽ xoá dữ liệu tạm lưu trên thiết bị. Để yêu
-cầu xoá dữ liệu tài khoản trên máy chủ, liên hệ **support@lptech.vn**.
+cầu xoá dữ liệu tài khoản trên máy chủ, liên hệ **hidequan@gmail.com**.
 
-**Liên hệ:** LP Tech — support@lptech.vn
+**Liên hệ:** LP Tech — hidequan@gmail.com
 
 ---
 
@@ -63,6 +63,6 @@ advertising. No advertising tracking.
 tester device information (model, OS version) to deliver builds.
 
 **Data storage & deletion:** Uninstalling the app removes locally cached data. To request
-deletion of account data stored on our servers, contact **support@lptech.vn**.
+deletion of account data stored on our servers, contact **hidequan@gmail.com**.
 
-**Contact:** LP Tech — support@lptech.vn
+**Contact:** LP Tech — hidequan@gmail.com
