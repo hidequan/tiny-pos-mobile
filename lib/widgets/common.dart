@@ -638,9 +638,13 @@ class TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    // Add the device status-bar / notch inset to the top so the title doesn't
+    // render underneath the system clock & battery. No SafeArea(top) wraps this
+    // header anywhere up the tree (the bottom nav uses SafeArea(top: false)).
+    final topInset = MediaQuery.paddingOf(context).top;
     return Container(
       color: p.cream,
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      padding: EdgeInsets.fromLTRB(16, 10 + topInset, 16, 12),
       child: Row(
         children: [
           if (leading != null) ...[leading!, const SizedBox(width: 6)],
