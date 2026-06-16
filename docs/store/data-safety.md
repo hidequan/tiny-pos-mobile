@@ -14,7 +14,7 @@ câu trả lời sau (phản ánh đúng hành vi thật của app).
   chúng tôi). **Không chia sẻ với bên thứ ba** (No data shared).
 - **Is all of the user data encrypted in transit?** → **Yes** (toàn bộ gọi API qua HTTPS).
 - **Do you provide a way for users to request that their data be deleted?** → **Yes** — người
-  dùng/chủ cửa hàng liên hệ **hidequan@gmail.com** để yêu cầu xoá dữ liệu tài khoản trên máy
+  dùng/chủ cửa hàng liên hệ **technology.lamphongtech@gmail.com** để yêu cầu xoá dữ liệu tài khoản trên máy
   chủ; gỡ cài đặt sẽ xoá dữ liệu tạm lưu trên thiết bị.
 - **Mục đích sử dụng dữ liệu (purpose):** App functionality (đăng nhập, đồng bộ vận hành).
   **KHÔNG** dùng cho quảng cáo, **KHÔNG** tracking, **KHÔNG** bán dữ liệu.

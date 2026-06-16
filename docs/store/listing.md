@@ -13,7 +13,7 @@ Thông tin điền vào Google Play Console / App Store Connect khi nộp kiểm
 - **Nhà phát triển / Developer:** LP Tech
 - **Privacy policy URL:** https://hidequan.github.io/tiny-pos-privacy/
 - **Support URL:** https://hidequan.github.io/tiny-pos-privacy/ (trang hỗ trợ/liên hệ)
-- **Email hỗ trợ:** hidequan@gmail.com
+- **Email hỗ trợ:** technology.lamphongtech@gmail.com
 
 ## Mô tả ngắn (Play, ≤80 ký tự)
 Quản lý bán hàng cho quán & chuỗi cà phê: order, bàn, ca, kho, báo cáo.
