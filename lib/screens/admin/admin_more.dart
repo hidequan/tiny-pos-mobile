@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../app_info.dart';
 import '../../state/app_state.dart';
 import '../../state/session.dart';
 import '../../theme/palette.dart';
@@ -15,6 +16,7 @@ class AdminMoreScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final u = context.watch<SessionState>().user;
     final p = context.palette;
 
     final items = [
@@ -31,13 +33,14 @@ class AdminMoreScreen extends StatelessWidget {
       ['receipt', p.cream2, p.ink2, 'Audit log', 'Nhật ký thao tác toàn hệ thống', 'audit'],
       ['layers', p.blueBg, const Color(0xFF3E6E8E), 'Giám sát đồng bộ', 'Thiết bị & conflict', 'syncmonitor'],
       ['settings', p.cream2, p.espresso, 'Cài đặt hệ thống', 'Thuế, in bill, thiết bị', 'settings'],
+      ['coffee', p.cream2, p.terracotta, 'Giới thiệu & Hỗ trợ', 'Phiên bản · liên hệ · bảo mật', 'about'],
     ];
 
     return Column(children: [
       TopBar(
         title: 'Quản lý',
-        subtitle: Text('Tiny POS · v0.2.2', style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
-        actions: [Avatar('AN', onTap: () => openAdminProfile(context))],
+        subtitle: Text('${AppInfo.name} · v${AppInfo.version}', style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.ink2)),
+        actions: [Avatar(u?.initials ?? 'QT', onTap: () => openAdminProfile(context))],
       ),
       Expanded(
         child: ListView(
@@ -57,6 +60,8 @@ class AdminMoreScreen extends StatelessWidget {
                     onTap: () {
                       if (it[5] == 'settings') {
                         openSettings(context);
+                      } else if (it[5] == 'about') {
+                        openAbout(context);
                       } else {
                         state.openAdminSub(it[5] as String);
                       }
@@ -66,7 +71,7 @@ class AdminMoreScreen extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.all(18),
-              child: Text('Tiny POS · Bản xem trước di động\n© 2025 · Đăng nhập: Nguyễn Văn An',
+              child: Text('${AppInfo.name} v${AppInfo.version} · ${AppInfo.developer}\n© 2026 · Hỗ trợ: ${AppInfo.supportEmail}',
                   textAlign: TextAlign.center, style: AppType.body(size: 12.5, weight: FontWeight.w600, color: p.muted)),
             ),
             Padding(

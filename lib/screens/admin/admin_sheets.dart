@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../app_info.dart';
 import '../../state/app_state.dart';
 import '../../state/session.dart';
 import '../../data/models.dart';
@@ -135,16 +136,17 @@ void openAdminProfile(BuildContext context) {
   final p0 = context.palette;
   context.shell.showSheet((_) => Consumer<AppState>(builder: (context, state, _) {
         final p = context.palette;
+        final u = context.watch<SessionState>().user;
         return AppSheet(
           title: 'Tài khoản',
           body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(0, 6, 0, 16),
               child: Row(children: [
-                Avatar('AN', size: 56),
+                Avatar(u?.initials ?? 'QT', size: 56),
                 const SizedBox(width: 14),
                 Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                  Text('Nguyễn Văn An', style: AppType.body(size: 17, weight: FontWeight.w800, color: p.ink)),
+                  Text(u?.fullName ?? 'Quản trị', style: AppType.body(size: 17, weight: FontWeight.w800, color: p.ink)),
                   const SizedBox(height: 5),
                   const AppBadge('⚙️ Quản trị', color: BadgeColor.red),
                 ]),
@@ -173,6 +175,80 @@ void openAdminProfile(BuildContext context) {
           }),
         );
       }));
+}
+
+/// About / Support sheet — developer identity, version, support contact &
+/// privacy policy. Surfaces the info Apple guideline 1.5 (Developer Information)
+/// expects users to be able to find inside the app.
+void openAbout(BuildContext context) {
+  context.shell.showSheet((_) {
+    final p = context.palette;
+    Widget kv(String label, String value, {bool selectable = false}) => Container(
+          width: double.infinity,
+          color: p.paper,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label, style: AppType.body(size: 12, weight: FontWeight.w800, color: p.ink2)),
+              const SizedBox(height: 3),
+              selectable
+                  ? SelectableText(value, style: AppType.body(size: 14.5, weight: FontWeight.w700, color: p.ink))
+                  : Text(value, style: AppType.body(size: 14.5, weight: FontWeight.w700, color: p.ink)),
+            ],
+          ),
+        );
+    return AppSheet(
+      title: 'Giới thiệu & Hỗ trợ',
+      body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(0, 6, 0, 16),
+          child: Row(children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFFC75B39), Color(0xFFD98A4E)],
+                ),
+                borderRadius: BorderRadius.circular(15),
+              ),
+              alignment: Alignment.center,
+              child: const Text('☕', style: TextStyle(fontSize: 26)),
+            ),
+            const SizedBox(width: 14),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              Text('${AppInfo.name} ${AppInfo.version}', style: AppType.body(size: 17, weight: FontWeight.w800, color: p.ink)),
+              const SizedBox(height: 4),
+              Text('Phát triển bởi ${AppInfo.developer}', style: AppType.body(size: 13, weight: FontWeight.w600, color: p.ink2)),
+            ]),
+          ]),
+        ),
+        CardBox(
+          clip: true,
+          padding: EdgeInsets.zero,
+          child: RowList([
+            kv('Nhà phát triển', AppInfo.developer),
+            kv('Phiên bản', '${AppInfo.version} (build ${AppInfo.build})'),
+            kv('Email hỗ trợ', AppInfo.supportEmail, selectable: true),
+            kv('Chính sách bảo mật', AppInfo.privacyUrl, selectable: true),
+          ]),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(2, 14, 2, 4),
+          child: Text(
+            'Tiny POS kết nối tới máy chủ dùng chung với web POS. Tài khoản, đơn hàng, '
+            'ca làm và báo cáo được đồng bộ và bảo vệ khi truyền bằng HTTPS. Ứng dụng cần '
+            'đăng nhập và kết nối internet để hoạt động.',
+            style: AppType.body(size: 12.5, weight: FontWeight.w500, color: p.muted),
+          ),
+        ),
+      ]),
+    );
+  });
 }
 
 /// Edit-product sheet.

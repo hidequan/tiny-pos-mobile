@@ -10,8 +10,10 @@ Thông tin điền vào Google Play Console / App Store Connect khi nộp kiểm
 - **Danh mục / Category:** Business (Doanh nghiệp) — phụ: Productivity
 - **Phân loại nội dung:** 3+ (Everyone) — không có nội dung nhạy cảm
 - **Giá:** Miễn phí, không quảng cáo, không mua trong app
-- **Privacy policy URL:** (xem docs/store/PRIVACY_URL.txt sau khi host)
-- **Email hỗ trợ:** hidequan@gmail.com
+- **Nhà phát triển / Developer:** LP Tech
+- **Privacy policy URL:** https://hidequan.github.io/tiny-pos-privacy/
+- **Support URL:** https://hidequan.github.io/tiny-pos-privacy/ (trang hỗ trợ/liên hệ)
+- **Email hỗ trợ:** support@lptech.vn
 
 ## Mô tả ngắn (Play, ≤80 ký tự)
 Quản lý bán hàng cho quán & chuỗi cà phê: order, bàn, ca, kho, báo cáo.
@@ -29,10 +31,11 @@ trễ, tick từng món và hoàn thành đơn.
 ✦ **Quản trị** — Tổng quan doanh thu, biểu đồ 7 ngày, quản lý thực đơn, kho & định lượng
 (BOM), báo cáo cơ cấu thanh toán, ca làm, nhân viên & phân quyền (RBAC), chi nhánh.
 
-✦ **Tiện lợi** — Chế độ tối, tìm kiếm, dữ liệu lưu ngay trên máy (không cần mạng để xem
-lại giỏ hàng/đơn). Giao diện tông cà phê ấm, thao tác một tay.
+✦ **Tiện lợi** — Chế độ tối, tìm kiếm, giao diện tông cà phê ấm, thao tác một tay. Dữ liệu
+được đồng bộ qua máy chủ dùng chung với web POS nên mọi thiết bị luôn cập nhật.
 
-Dữ liệu của bạn được lưu cục bộ trên thiết bị — không thu thập, không gửi đi.
+Ứng dụng cần đăng nhập tài khoản và kết nối internet để hoạt động (không chạy offline). Dữ
+liệu được bảo vệ khi truyền bằng HTTPS — xem chính sách bảo mật.
 
 ## Từ khóa (iOS, ≤100 ký tự)
 POS,bán hàng,cà phê,quán,order,thu ngân,KDS,quản lý,kho,báo cáo,bàn
@@ -40,10 +43,11 @@ POS,bán hàng,cà phê,quán,order,thu ngân,KDS,quản lý,kho,báo cáo,bàn
 ## Tags (Play)
 Point of sale, Cafe, Restaurant, Order management, Inventory
 
-## What's new (release notes mẫu cho bản v0.1.2)
-- Lưu dữ liệu cục bộ: giỏ hàng/đơn/ca/giao diện sống sót khi mở lại app.
-- Thêm form quản lý nhân viên, khuyến mãi, chi nhánh.
-- Tìm kiếm sản phẩm/đơn và chế độ tối toàn app.
+## What's new (release notes cho bản v0.3.1)
+- Đăng nhập tài khoản & đồng bộ dữ liệu thật với hệ thống POS (app và web dùng chung dữ liệu).
+- Màn hình pha chế (KDS) real-time: hàng chờ FIFO, cảnh báo đơn trễ, hoàn thành đơn.
+- Báo cáo doanh thu, biểu đồ 7 ngày, cơ cấu thanh toán; quản lý nhân viên & phân quyền (RBAC), chi nhánh.
+- Thêm mục "Giới thiệu & Hỗ trợ" (phiên bản, liên hệ, chính sách bảo mật) trong phần Quản lý.
 
 ## Tài nguyên đồ họa cần có
 | Loại | Kích thước | Trạng thái |
