@@ -2,11 +2,11 @@
 ///
 /// Single source of truth for the developer name, support contact and privacy
 /// URL shown in the in-app "Giới thiệu & Hỗ trợ" sheet and store metadata.
-/// Keep [version]/[build] in sync with `pubspec.yaml` (currently 0.3.2+12).
+/// Keep [version]/[build] in sync with `pubspec.yaml` (currently 0.3.3+13).
 class AppInfo {
   static const String name = 'Tiny POS';
-  static const String version = '0.3.2';
-  static const String build = '12';
+  static const String version = '0.3.3';
+  static const String build = '13';
 
   /// Developer / company name (shown on the store listing & privacy policy).
   static const String developer = 'LP Tech';

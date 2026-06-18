@@ -1,7 +1,7 @@
 name: tiny_pos_mobile
 description: "Tiny POS - he thong ban hang chuoi ca phe"
 publish_to: 'none'
-version: 0.3.2+12
+version: 0.3.3+13
 
 environment:
   sdk: ^3.12.1
